@@ -1,0 +1,73 @@
+:root{
+  --fundo:#ffffff; --texto:#1b1f24; --suave:#5b6470; --linha:rgba(0,0,0,.08);
+  --azul:#1a73e8; --sombra:0 2px 10px rgba(0,0,0,.16);
+  --gap:max(12px, env(safe-area-inset-left));
+}
+@media (prefers-color-scheme: dark){
+  :root{ --fundo:#1f2329; --texto:#eef1f4; --suave:#a5adb8; --linha:rgba(255,255,255,.1); --sombra:0 2px 12px rgba(0,0,0,.5); }
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;height:100%;overflow:hidden;background:#dfe3e6;
+  font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--texto);
+  overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+#map{position:fixed;inset:0}
+
+.chip{background:var(--fundo);border-radius:14px;box-shadow:var(--sombra)}
+.titulo{position:fixed;top:calc(env(safe-area-inset-top) + 12px);left:var(--gap);
+  padding:8px 12px;display:flex;flex-direction:column;max-width:calc(100% - 2*var(--gap) - 60px);z-index:2}
+.titulo strong{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.titulo span{font-size:12px;color:var(--suave)}
+
+.botoes{position:fixed;right:var(--gap);bottom:calc(env(safe-area-inset-bottom) + 28px);
+  display:flex;flex-direction:column;gap:10px;z-index:3;transition:transform .25s ease}
+body.com-ficha .botoes{transform:translateY(calc(-1 * var(--h-ficha, 0px)))}
+.btn{width:48px;height:48px;border-radius:50%;border:0;background:var(--fundo);color:var(--texto);
+  box-shadow:var(--sombra);display:grid;place-items:center;cursor:pointer;padding:0}
+.btn svg{width:22px;height:22px;fill:currentColor}
+.btn:active{transform:scale(.94)}
+.btn-gps .seta{fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round}
+.btn-gps[data-estado="buscando"] .seta{stroke:var(--azul);animation:pisca 1s ease-in-out infinite}
+.btn-gps[data-estado="on"] .seta{stroke:var(--azul)}
+.btn-gps[data-estado="seguir"] .seta{fill:var(--azul);stroke:var(--azul)}
+@keyframes pisca{50%{opacity:.25}}
+
+.painel{position:fixed;right:calc(var(--gap) + 58px);bottom:calc(env(safe-area-inset-bottom) + 140px);
+  padding:6px 4px;z-index:3;display:flex;flex-direction:column}
+.painel label{display:flex;align-items:center;gap:10px;padding:9px 12px;white-space:nowrap}
+.painel input{width:18px;height:18px;accent-color:var(--azul)}
+
+.precisao{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 12px);
+  padding:6px 12px;font-size:13px;color:var(--suave);z-index:2}
+@media (max-width:520px){ .precisao{top:auto;bottom:calc(env(safe-area-inset-bottom) + 28px);left:var(--gap);transform:none} }
+body.com-ficha .precisao{display:none}
+
+.ficha{position:fixed;left:0;right:0;bottom:0;z-index:4;background:var(--fundo);
+  border-radius:18px 18px 0 0;box-shadow:0 -4px 18px rgba(0,0,0,.18);
+  padding:16px 18px calc(env(safe-area-inset-bottom) + 18px);animation:sobe .2s ease}
+@media (min-width:700px){ .ficha{left:auto;right:76px;bottom:28px;width:320px;border-radius:16px} }
+@keyframes sobe{from{transform:translateY(30px);opacity:0}}
+.ficha h2{margin:0 36px 10px 0;font-size:18px}
+.ficha dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 16px}
+.ficha dt{color:var(--suave)} .ficha dd{margin:0;font-variant-numeric:tabular-nums;font-weight:600}
+.fechar{position:absolute;top:10px;right:12px;width:34px;height:34px;border:0;border-radius:50%;
+  background:var(--linha);color:var(--texto);font-size:22px;line-height:1;cursor:pointer}
+
+.aviso{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 70px);transform:translateX(-50%);
+  background:#1b1f24;color:#fff;padding:10px 14px;border-radius:12px;z-index:5;font-size:14px;
+  max-width:calc(100% - 32px);box-shadow:var(--sombra)}
+
+/* Marcador de posição */
+.eu{position:relative;width:0;height:0;pointer-events:none}
+.eu .raio{position:absolute;left:0;top:0;border-radius:50%;transform:translate(-50%,-50%);
+  background:rgba(26,115,232,.14);border:1px solid rgba(26,115,232,.35)}
+.eu .cone{position:absolute;left:-22px;top:-44px;width:44px;height:44px;transform-origin:22px 44px;opacity:0;
+  background:radial-gradient(circle at 50% 100%,rgba(26,115,232,.55),rgba(26,115,232,0) 70%);
+  clip-path:polygon(50% 100%,15% 0,85% 0);transition:opacity .3s}
+.eu.com-rumo .cone{opacity:1}
+.eu .ponto{position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;
+  background:var(--azul);border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.eu.velho .ponto{background:#8a9099}
+
+.maplibregl-ctrl-attrib{font-size:10px}
+.maplibregl-ctrl-bottom-left{margin-bottom:env(safe-area-inset-bottom)}

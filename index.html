@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="Mapa dos lotes do núcleo urbano — REURB">
+<title>Jacinta Ambrosina · Lotes</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://jkvxudldoepbouqgfper.supabase.co" crossorigin>
+<link rel="stylesheet" href="lib/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="map" aria-label="Mapa"></div>
+
+<header class="chip titulo" id="titulo">
+  <strong id="t-nome"></strong><span id="t-sub"></span>
+</header>
+
+<div class="botoes" role="toolbar">
+  <button class="btn" id="b-camadas" aria-label="Camadas" title="Camadas">
+    <svg viewBox="0 0 24 24"><path d="M12 3 2 8.5 12 14l10-5.5L12 3Zm-8.2 9.6L2 13.6 12 19l10-5.4-1.8-1L12 17l-8.2-4.4Z"/></svg>
+  </button>
+  <button class="btn" id="b-nucleo" aria-label="Ver o núcleo inteiro" title="Ver o núcleo inteiro">
+    <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <button class="btn btn-gps" id="b-gps" aria-label="Minha localização" title="Minha localização" data-estado="off">
+    <svg viewBox="0 0 24 24"><path class="seta" d="M12 2 19 21l-7-4-7 4 7-19Z"/></svg>
+  </button>
+</div>
+
+<div class="painel chip" id="p-camadas" hidden>
+  <label><input type="checkbox" id="c-orto" checked> Ortofoto</label>
+  <label><input type="checkbox" id="c-sat"> Satélite (apoio)</label>
+  <label><input type="checkbox" id="c-num" checked> Números dos lotes</label>
+</div>
+
+<div class="precisao chip" id="precisao" hidden></div>
+
+<section class="ficha" id="ficha" hidden aria-live="polite">
+  <button class="fechar" id="f-fechar" aria-label="Fechar">×</button>
+  <h2 id="f-titulo"></h2>
+  <dl id="f-dados"></dl>
+</section>
+
+<div class="aviso" id="aviso" hidden></div>
+
+<script src="config.js"></script>
+<script src="lib/pmtiles.js"></script>
+<script src="lib/maplibre-gl.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
