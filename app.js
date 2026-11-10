@@ -9,7 +9,20 @@ $('t-sub').textContent = C.subtitulo;
 
 // ---------- Mapa ----------
 const protocolo = new pmtiles.Protocol();
-maplibregl.addProtocol('pmtiles', protocolo.tile);
+// Tiles totalmente transparentes não são gravados no PMTiles; a biblioteca devolve data:null e o
+// MapLibre 4 fica esperando por eles. Entrega um PNG transparente no lugar.
+let pngVazio = null;
+async function tileVazio() {
+  if (pngVazio) return pngVazio;
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const b = await new Promise((r) => c.toBlob(r, 'image/png'));
+  return (pngVazio = await b.arrayBuffer());
+}
+maplibregl.addProtocol('pmtiles', async (params, abort) => {
+  const r = await protocolo.tile(params, abort);
+  if (r && r.data == null) return { data: await tileVazio() };
+  return r;
+});
 const base = new URL('.', location.href).href;
 const urlOrto = new URL(C.ortofoto, base).href;
 
@@ -94,18 +107,23 @@ async function carregarReserva() {
   return r.json();
 }
 
-map.on('load', () => {
-  const comTempo = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('tempo')), ms))]);
-  comTempo(carregarDados(), 12000)
-    .catch((e) => {
-      if (!C.dados.reserva) throw e;
-      aviso('Banco indisponível: mostrando a última cópia dos lotes.', 5000);
-      return carregarReserva();
-    })
-    .then((fc) => map.getSource('nucleo').setData(fc))
-    .catch(() => aviso('Não foi possível carregar os lotes. Verifique a conexão.'));
-  ligarCamada('sat', $('c-sat').checked);
-});
+// Executa assim que o estilo existir, sem esperar todos os tiles (o evento 'load' espera).
+function quandoEstiloPronto(cb) {
+  if (map.getSource('nucleo')) cb(); else map.once('styledata', () => quandoEstiloPronto(cb));
+}
+
+// Os lotes começam a ser buscados junto com a abertura da página, em paralelo com o mapa.
+const comTempo = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('tempo')), ms))]);
+comTempo(carregarDados(), 12000)
+  .catch((e) => {
+    if (!C.dados.reserva) throw e;
+    aviso('Banco indisponível: mostrando a última cópia dos lotes.', 5000);
+    return carregarReserva();
+  })
+  .then((fc) => quandoEstiloPronto(() => map.getSource('nucleo').setData(fc)))
+  .catch(() => aviso('Não foi possível carregar os lotes. Verifique a conexão.'));
+
+quandoEstiloPronto(() => ligarCamada('sat', $('c-sat').checked));
 
 // ---------- Camadas ----------
 $('c-sat').checked = C.satelite && !economia;
