@@ -50,6 +50,34 @@ body.com-ficha .precisao{display:none}
 .ficha h2{margin:0 36px 10px 0;font-size:18px}
 .ficha dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 16px}
 .ficha dt{color:var(--suave)} .ficha dd{margin:0;font-variant-numeric:tabular-nums;font-weight:600}
+.titulo .contagem{font-size:12px;color:var(--suave);margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.titulo .contagem i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-left:2px}
+.titulo .contagem b{color:var(--texto);font-weight:600}
+
+.f-sit{display:flex;align-items:center;gap:10px;margin:-2px 0 12px;flex-wrap:wrap}
+.f-sit small{color:var(--suave);font-size:12px}
+.sit{font-size:13px;font-weight:600;padding:3px 10px;border-radius:999px}
+.sit.cad{background:rgba(22,163,74,.15);color:#15803d}
+.sit.emc{background:rgba(249,115,22,.16);color:#c2410c}
+.sit.nada{background:var(--linha);color:var(--suave)}
+@media (prefers-color-scheme: dark){ .sit.cad{color:#4ade80} .sit.emc{color:#fb923c} }
+
+.f-acoes{display:flex;gap:8px;margin:0 0 14px}
+.f-acoes button{flex:1;min-height:42px;border-radius:12px;border:1.5px solid var(--linha);background:transparent;
+  color:var(--texto);font:600 14px/1.1 system-ui,sans-serif;cursor:pointer;padding:6px 8px}
+.f-acoes .b-cad{border-color:#16a34a} .f-acoes .b-emc{border-color:#f97316}
+.f-acoes .b-cad.ativo{background:#16a34a;color:#fff} .f-acoes .b-emc.ativo{background:#f97316;color:#fff}
+.f-acoes .b-limpar{flex:0 0 auto;color:var(--suave)}
+.f-acoes button:active{transform:scale(.97)}
+
+.f-pin{margin:0 0 14px;display:flex;flex-direction:column;gap:6px}
+.f-pin label{font-size:13px;color:var(--suave)}
+.f-pin div{display:flex;gap:8px}
+.f-pin input{flex:1;min-width:0;height:42px;border-radius:10px;border:1.5px solid var(--linha);padding:0 12px;
+  font-size:18px;letter-spacing:.2em;background:transparent;color:var(--texto)}
+.f-pin button{height:42px;border:0;border-radius:10px;padding:0 16px;background:var(--azul);color:#fff;font-weight:600}
+.f-pin small{min-height:1em;color:#c2410c;font-size:12px}
+
 .fechar{position:absolute;top:10px;right:12px;width:34px;height:34px;border:0;border-radius:50%;
   background:var(--linha);color:var(--texto);font-size:22px;line-height:1;cursor:pointer}
 

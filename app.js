@@ -24,6 +24,8 @@ maplibregl.addProtocol('pmtiles', async (params, abort) => {
   return r;
 });
 const base = new URL('.', location.href).href;
+const COR_CAD = '#16a34a';   // CADASTRADO
+const COR_EMC = '#f97316';   // EM CADASTRAMENTO
 const urlOrto = new URL(C.ortofoto, base).href;
 
 const map = new maplibregl.Map({
@@ -48,8 +50,8 @@ const map = new maplibregl.Map({
         attribution: 'Satélite © Esri'
       },
       orto: { type: 'raster', url: 'pmtiles://' + urlOrto, tileSize: 512, attribution: 'Ortofoto © HOCA Consultoria' },
-      // generateId: ids numéricos internos para o destaque do lote (o ID_VINCULO pode ter letra, ex.: 2A)
-      nucleo: { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, generateId: true }
+      // promoteId 'k' (fid numérico do banco): o ID_VINCULO pode ter letra (ex.: 2A) e não serve de id interno
+      nucleo: { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, promoteId: 'k' }
     },
     layers: [
       { id: 'fundo', type: 'background', paint: { 'background-color': '#e9ecee' } },
@@ -58,12 +60,19 @@ const map = new maplibregl.Map({
       { id: 'lote-fundo', type: 'fill', source: 'nucleo', filter: ['==', ['get', 't'], 'L'],
         paint: { 'fill-color': '#ffd400',
                  'fill-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 0.38, 0.001] } },
+      // Situação do cadastro: verde = CADASTRADO, laranja = EM CADASTRAMENTO
+      { id: 'lote-sit-fundo', type: 'fill', source: 'nucleo',
+        filter: ['all', ['==', ['get', 't'], 'L'], ['has', 's']],
+        paint: { 'fill-color': ['match', ['get', 's'], 'CADASTRADO', COR_CAD, COR_EMC], 'fill-opacity': 0.34 } },
       { id: 'nucleo', type: 'line', source: 'nucleo', filter: ['==', ['get', 't'], 'N'],
         paint: { 'line-color': '#ff1e1e', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 1.6, 19, 3] } },
       { id: 'quadra', type: 'line', source: 'nucleo', filter: ['==', ['get', 't'], 'Q'],
         paint: { 'line-color': '#111', 'line-width': ['interpolate', ['linear'], ['zoom'], 15, 0.6, 19, 1.6] } },
       { id: 'lote', type: 'line', source: 'nucleo', filter: ['==', ['get', 't'], 'L'], minzoom: 15,
         paint: { 'line-color': '#2563ff', 'line-width': ['interpolate', ['linear'], ['zoom'], 16, 0.6, 20, 1.6] } },
+      { id: 'lote-sit', type: 'line', source: 'nucleo', filter: ['all', ['==', ['get', 't'], 'L'], ['has', 's']],
+        paint: { 'line-color': ['match', ['get', 's'], 'CADASTRADO', COR_CAD, COR_EMC],
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 15, 1.5, 19, 3] } },
       { id: 'lote-sel', type: 'line', source: 'nucleo', filter: ['==', ['get', 't'], 'L'],
         paint: { 'line-color': '#ffd400', 'line-width': 3,
                  'line-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 1, 0] } },
@@ -85,20 +94,34 @@ map.touchZoomRotate.disableRotation();
 window.mapa = map; // acesso pelo console para depuração
 
 // ---------- Dados ----------
-async function carregarDados() {
+const SB = C.dados.tipo === 'supabase';
+const CHAVE_FILA = 'reurb_fila:' + (C.dados.nucleo || C.titulo);
+const CHAVE_PIN = 'reurb_pin';
+const ler = (k, padrao) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : padrao; } catch (_) { return padrao; } };
+const gravar = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
+
+let dados = null;                      // FeatureCollection exibida
+let fila = ler(CHAVE_FILA, []);        // marcações feitas no aparelho e ainda não confirmadas pelo banco
+let ultimaCarga = 0;
+
+async function rpc(funcao, corpo) {
   const d = C.dados;
-  let resp;
-  if (d.tipo === 'supabase') {
-    const h = { apikey: d.chaveAnon, 'Content-Type': 'application/json' };
-    if (d.chaveAnon.startsWith('eyJ')) h.Authorization = `Bearer ${d.chaveAnon}`; // chave "anon" antiga (JWT)
-    resp = await fetch(`${d.url}/rest/v1/rpc/${d.funcao}`, {
-      method: 'POST', headers: h, body: JSON.stringify({ p_nucleo: d.nucleo })
-    });
-  } else {
-    resp = await fetch(new URL(d.url, base).href, { cache: 'no-cache' });
+  const h = { apikey: d.chaveAnon, 'Content-Type': 'application/json' };
+  if (d.chaveAnon.startsWith('eyJ')) h.Authorization = `Bearer ${d.chaveAnon}`; // chave "anon" antiga (JWT)
+  const r = await fetch(`${d.url}/rest/v1/rpc/${funcao}`, { method: 'POST', headers: h, body: JSON.stringify(corpo) });
+  if (!r.ok) {
+    const e = new Error('HTTP ' + r.status); e.status = r.status;
+    try { e.msg = (await r.json()).message; } catch (_) {}
+    throw e;
   }
-  if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  return resp.json();
+  return r.json();
+}
+
+async function carregarDados() {
+  if (SB) return rpc(C.dados.funcao, { p_nucleo: C.dados.nucleo });
+  const r = await fetch(new URL(C.dados.url, base).href, { cache: 'no-cache' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
 }
 
 async function carregarReserva() {
@@ -112,16 +135,74 @@ function quandoEstiloPronto(cb) {
   if (map.getSource('nucleo')) cb(); else map.once('styledata', () => quandoEstiloPronto(cb));
 }
 
-// Os lotes começam a ser buscados junto com a abertura da página, em paralelo com o mapa.
+// Marcações ainda pendentes valem por cima do que veio do banco.
+function aplicarFila(fc) {
+  const porId = new Map(fila.map((m) => [m.id, m]));
+  for (const f of fc.features) {
+    const p = f.properties;
+    if (p.t !== 'L') continue;
+    delete p.pend;
+    if (!porId.has(p.id)) continue;
+    const m = porId.get(p.id);
+    if (m.s) p.s = m.s; else delete p.s;
+    p.em = m.em; p.pend = true;
+  }
+  return fc;
+}
+function limparNulos(fc) {
+  for (const f of fc.features) { const p = f.properties; if (p.s == null) delete p.s; if (p.em == null) delete p.em; }
+  return fc;
+}
+
+function redesenhar() {
+  quandoEstiloPronto(() => {
+    map.getSource('nucleo').setData(dados);
+    if (selecionado !== null) {
+      const f = loteK(selecionado);
+      if (f) { map.setFeatureState({ source: 'nucleo', id: selecionado }, { sel: true }); abrirFicha(f.properties); }
+      else fecharFicha();
+    }
+  });
+  atualizarContagem();
+}
+
+const CHAVE_CACHE = 'reurb_ultima_carga:' + (C.dados.nucleo || C.titulo);
+let doBanco = false;           // true quando o que está na tela veio do banco nesta sessão
+
+function mostrar(fc, origem) {
+  dados = aplicarFila(limparNulos(fc));
+  doBanco = origem === 'banco';
+  if (doBanco) { ultimaCarga = Date.now(); gravar(CHAVE_CACHE, fc); }  // última versão do banco fica no aparelho
+  redesenhar();
+}
+
+const loteK = (k) => dados && dados.features.find((f) => f.properties.t === 'L' && f.properties.k === k);
+
 const comTempo = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('tempo')), ms))]);
-comTempo(carregarDados(), 12000)
-  .catch((e) => {
-    if (!C.dados.reserva) throw e;
-    aviso('Banco indisponível: mostrando a última cópia dos lotes.', 5000);
-    return carregarReserva();
-  })
-  .then((fc) => quandoEstiloPronto(() => map.getSource('nucleo').setData(fc)))
-  .catch(() => aviso('Não foi possível carregar os lotes. Verifique a conexão.'));
+function atualizar(primeira) {
+  return comTempo(carregarDados(), 12000)
+    .then((fc) => mostrar(fc, SB ? 'banco' : 'arquivo'))
+    .catch((e) => {
+      if (!primeira) return;                       // recargas silenciosas: mantém o que está na tela
+      const guardado = ler(CHAVE_CACHE, null);     // 1º: última versão do banco guardada no aparelho
+      if (guardado) { aviso('Sem conexão com o banco: mostrando os dados da última visita.', 5000); return mostrar(guardado, 'cache'); }
+      if (!C.dados.reserva) throw e;               // 2º: cópia estática publicada com o site
+      aviso('Banco indisponível: mostrando a cópia publicada dos lotes.', 5000);
+      return carregarReserva().then((fc) => mostrar(fc, 'reserva'));
+    })
+    .catch(() => aviso('Não foi possível carregar os lotes. Verifique a conexão.'));
+}
+
+// Os lotes começam a ser buscados junto com a abertura da página, em paralelo com o mapa.
+atualizar(true).then(enviarFila);
+
+// Traz marcações feitas por outros aparelhos: ao voltar para a página e a cada 2 minutos.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - ultimaCarga > 30000) atualizar(false).then(enviarFila);
+});
+setInterval(() => { if (document.visibilityState === 'visible') atualizar(false).then(enviarFila); }, 120000);
+// Sinal voltou: envia o que ficou guardado e traz a versão atual do banco.
+addEventListener('online', () => enviarFila().then(() => atualizar(false)));
 
 quandoEstiloPronto(() => ligarCamada('sat', $('c-sat').checked));
 
@@ -131,36 +212,147 @@ function ligarCamada(id, on) { if (map.getLayer(id)) map.setLayoutProperty(id, '
 $('c-orto').onchange = (e) => ligarCamada('orto', e.target.checked);
 $('c-sat').onchange = (e) => ligarCamada('sat', e.target.checked);
 $('c-num').onchange = (e) => ligarCamada('lote-num', e.target.checked);
+$('c-sit').onchange = (e) => { ligarCamada('lote-sit', e.target.checked); ligarCamada('lote-sit-fundo', e.target.checked); };
 $('b-camadas').onclick = (e) => { e.stopPropagation(); $('p-camadas').hidden = !$('p-camadas').hidden; };
 document.addEventListener('click', (e) => { if (!$('p-camadas').contains(e.target)) $('p-camadas').hidden = true; });
 $('b-nucleo').onclick = () => { pararSeguir(); map.fitBounds(C.limites, { padding: 40, duration: 700 }); };
 
-// ---------- Ficha do lote ----------
-let selecionado = null;
-const fmt = (n, c = 2) => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c });
-function selecionar(id) {
-  if (selecionado !== null) map.setFeatureState({ source: 'nucleo', id: selecionado }, { sel: false });
-  selecionado = id;
-  if (id !== null) map.setFeatureState({ source: 'nucleo', id }, { sel: true });
+function atualizarContagem() {
+  if (!dados) return;
+  let cad = 0, emc = 0;
+  for (const f of dados.features) {
+    if (f.properties.t !== 'L') continue;
+    if (f.properties.s === 'CADASTRADO') cad++; else if (f.properties.s === 'EM CADASTRAMENTO') emc++;
+  }
+  const pend = fila.length;
+  const partes = [];
+  if (cad) partes.push(`<i style="background:${COR_CAD}"></i>${cad} cadastrado${cad === 1 ? '' : 's'}`);
+  if (emc) partes.push(`<i style="background:${COR_EMC}"></i>${emc} em cadastramento`);
+  if (pend) partes.push(`<b>${pend} a enviar</b>`);
+  $('t-cont').innerHTML = partes.join(' ');
+  $('t-cont').hidden = !(cad || emc || pend);
 }
+
+// ---------- Ficha do lote ----------
+let selecionado = null;        // k (fid) do lote selecionado
+const fmt = (n, c = 2) => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c });
+const fmtData = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+function selecionar(k) {
+  if (selecionado !== null) map.setFeatureState({ source: 'nucleo', id: selecionado }, { sel: false });
+  selecionado = k;
+  if (k !== null) map.setFeatureState({ source: 'nucleo', id: k }, { sel: true });
+}
+const NOME_SIT = { 'CADASTRADO': 'Cadastrado', 'EM CADASTRAMENTO': 'Em cadastramento' };
 function abrirFicha(p) {
   $('f-titulo').textContent = `Quadra ${p.q} · Lote ${p.l}`;
+  const sit = p.s ? `<span class="sit ${p.s === 'CADASTRADO' ? 'cad' : 'emc'}">${NOME_SIT[p.s]}</span>`
+                  : '<span class="sit nada">Sem marcação</span>';
+  const quando = p.em ? `<small>${p.pend ? 'aguardando envio · ' : ''}${fmtData(p.em)}</small>` : '';
+  $('f-sit').innerHTML = sit + quando;
+  $('f-acoes').hidden = !SB;
+  for (const b of $('f-acoes').querySelectorAll('button')) {
+    b.classList.toggle('ativo', (b.dataset.s || null) === (p.s || null) && !!b.dataset.s);
+    if (!b.dataset.s) b.hidden = !p.s;
+  }
   $('f-dados').innerHTML =
     `<dt>Área</dt><dd>${fmt(p.a)} m²</dd><dt>Perímetro</dt><dd>${fmt(p.p)} m</dd><dt>ID vínculo</dt><dd>${p.id}</dd>`;
   $('ficha').hidden = false;
   document.body.classList.add('com-ficha');
   document.body.style.setProperty('--h-ficha', ($('ficha').offsetHeight - 10) + 'px');
 }
-function fecharFicha() { $('ficha').hidden = true; document.body.classList.remove('com-ficha'); selecionar(null); }
+function fecharFicha() {
+  $('ficha').hidden = true; $('f-pin').hidden = true; document.body.classList.remove('com-ficha'); selecionar(null);
+}
 $('f-fechar').onclick = fecharFicha;
 map.on('click', (e) => {
   const f = map.queryRenderedFeatures(e.point, { layers: ['lote-fundo'] })[0];
   if (!f) { fecharFicha(); return; }
+  $('f-pin').hidden = true;
   selecionar(f.id);
-  abrirFicha(f.properties);
+  abrirFicha(loteK(f.id).properties);
 });
 map.on('mouseenter', 'lote-fundo', () => (map.getCanvas().style.cursor = 'pointer'));
 map.on('mouseleave', 'lote-fundo', () => (map.getCanvas().style.cursor = ''));
+
+// ---------- Marcação de cadastro ----------
+$('f-acoes').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b || selecionado === null) return;
+  marcar(selecionado, b.dataset.s || null);
+});
+
+function marcar(k, s) {
+  const f = loteK(k); if (!f) return;
+  if (!ler(CHAVE_PIN, null)) return pedirPin(() => marcar(k, s));
+  const p = f.properties;
+  if ((p.s || null) === s) return;
+  const em = new Date().toISOString();
+  fila = fila.filter((m) => m.id !== p.id).concat([{ id: p.id, s, em }]);
+  gravar(CHAVE_FILA, fila);
+  aplicarFila(dados);
+  redesenhar();
+  enviarFila();
+}
+
+let enviando = false;
+async function enviarFila() {
+  if (!SB || enviando || !fila.length) return;
+  const pin = ler(CHAVE_PIN, null);
+  if (!pin) return;
+  enviando = true;
+  try {
+    while (fila.length) {
+      const m = fila[0];
+      const r = await comTempo(rpc('reurb_marcar', { p_nucleo: C.dados.nucleo, p_id: m.id, p_status: m.s || '', p_pin: pin }), 15000);
+      if (r && r.erro === 'pin') {
+        gravar(CHAVE_PIN, null);
+        aviso('PIN da equipe não confere. Toque no lote e marque de novo para digitar o PIN.', 6000);
+        break;
+      }
+      fila.shift(); gravar(CHAVE_FILA, fila);
+      const f = dados && dados.features.find((x) => x.properties.t === 'L' && x.properties.id === m.id);
+      if (r && r.erro === 'lote') aviso(`O lote de ID ${m.id} não existe mais no banco; marcação descartada.`, 6000);
+      else if (f && !fila.some((x) => x.id === m.id)) {
+        const p = f.properties; delete p.pend;
+        if (r.s) p.s = r.s; else delete p.s;
+        p.em = r.em;
+      }
+    }
+  } catch (e) {
+    if (e.status) aviso(e.msg || 'O banco recusou a marcação. Tente de novo em instantes.', 6000);
+    // sem sinal: as marcações continuam guardadas no aparelho e seguem quando a conexão voltar
+  } finally {
+    enviando = false;
+    if (dados) { aplicarFila(dados); redesenhar(); }
+  }
+  // Se a tela estava com dados guardados (sem sinal), traz a versão atual do banco depois de enviar.
+  if (!doBanco && !fila.length) await atualizar(false);
+}
+setInterval(() => { if (fila.length && navigator.onLine) enviarFila(); }, 30000);
+
+// PIN da equipe: pedido uma vez por aparelho, conferido no banco.
+let depoisDoPin = null;
+function pedirPin(cb) {
+  depoisDoPin = cb;
+  $('f-pin').hidden = false; $('f-pin-msg').textContent = '';
+  $('f-pin-in').value = ''; $('f-pin-in').focus();
+  document.body.style.setProperty('--h-ficha', ($('ficha').offsetHeight - 10) + 'px');
+}
+$('f-pin').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pin = $('f-pin-in').value.trim();
+  if (pin.length < 6) { $('f-pin-msg').textContent = 'O PIN tem pelo menos 6 caracteres.'; return; }
+  $('f-pin-msg').textContent = 'Conferindo…';
+  try {
+    const ok = await comTempo(rpc('reurb_pin_ok', { p_pin: pin }), 12000);
+    if (!ok) { $('f-pin-msg').textContent = 'PIN incorreto.'; return; }
+  } catch (err) {
+    if (err.status) { $('f-pin-msg').textContent = err.msg || 'Não foi possível conferir o PIN.'; return; }
+    // sem sinal: guarda e confere no envio
+  }
+  gravar(CHAVE_PIN, pin);
+  $('f-pin').hidden = true;
+  const cb = depoisDoPin; depoisDoPin = null; if (cb) cb();
+});
 
 // ---------- Avisos ----------
 let tAviso;
