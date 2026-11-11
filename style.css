@@ -78,6 +78,27 @@ body.com-ficha .precisao{display:none}
 .f-pin button{height:42px;border:0;border-radius:10px;padding:0 16px;background:var(--azul);color:#fff;font-weight:600}
 .f-pin small{min-height:1em;color:#c2410c;font-size:12px}
 
+.ficha{max-height:56vh;max-height:56dvh;overflow-y:auto;overscroll-behavior:contain}
+@media (min-width:700px){ .ficha{max-height:calc(100vh - 60px)} }
+.f-croqui{margin-top:12px;border-top:1px solid var(--linha);padding-top:8px}
+.f-croqui summary{cursor:pointer;font-weight:600;font-size:14px;padding:4px 0;color:var(--texto)}
+.f-croqui svg{display:block;width:100%;height:auto;max-height:34vh;margin:4px 0 6px}
+.cq-lote{fill:rgba(255,212,0,.28);stroke:#b38f00;stroke-width:1.6;stroke-linejoin:round}
+.cq-med{font:600 11px system-ui,sans-serif;fill:var(--texto);text-anchor:middle;dominant-baseline:middle;
+  paint-order:stroke;stroke:var(--fundo);stroke-width:3px}
+.cq-med.curto{font-size:9px}
+.cq-v{fill:#ffd400;stroke:var(--texto);stroke-width:1}
+.cq-vn{font:700 10px system-ui,sans-serif;fill:#c2410c;text-anchor:middle;dominant-baseline:middle;
+  paint-order:stroke;stroke:var(--fundo);stroke-width:3px}
+.cq-norte path{fill:var(--texto)} .cq-norte text{font:700 9px system-ui,sans-serif;fill:var(--texto);text-anchor:middle}
+.cq-escala path{fill:none;stroke:var(--suave);stroke-width:1.2}
+.cq-escala text{font:10px system-ui,sans-serif;fill:var(--suave);text-anchor:middle}
+.f-lados{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:2px 18px;font-size:13px}
+.f-lados li{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--linha)}
+.f-lados span{color:var(--suave)} .f-lados b{font-weight:600;font-variant-numeric:tabular-nums}
+.f-lados .tot{grid-column:1/-1;border-bottom:0}
+@media (prefers-color-scheme: dark){ .cq-vn{fill:#fb923c} }
+
 .fechar{position:absolute;top:10px;right:12px;width:34px;height:34px;border:0;border-radius:50%;
   background:var(--linha);color:var(--texto);font-size:22px;line-height:1;cursor:pointer}
 

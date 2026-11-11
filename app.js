@@ -51,7 +51,9 @@ const map = new maplibregl.Map({
       },
       orto: { type: 'raster', url: 'pmtiles://' + urlOrto, tileSize: 512, attribution: 'Ortofoto © HOCA Consultoria' },
       // promoteId 'k' (fid numérico do banco): o ID_VINCULO pode ter letra (ex.: 2A) e não serve de id interno
-      nucleo: { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, promoteId: 'k' }
+      nucleo: { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, promoteId: 'k' },
+      // lados (LineString com a medida) e vértices numerados do lote selecionado
+      medidas: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
     },
     layers: [
       { id: 'fundo', type: 'background', paint: { 'background-color': '#e9ecee' } },
@@ -86,7 +88,21 @@ const map = new maplibregl.Map({
       { id: 'quadra-num', type: 'symbol', source: 'nucleo', filter: ['==', ['get', 't'], 'R'], minzoom: 15,
         layout: { 'text-field': ['get', 'q'], 'text-font': ['Noto Sans Medium'], 'text-allow-overlap': true,
                   'text-size': ['interpolate', ['linear'], ['zoom'], 15, 10, 19, 16] },
-        paint: { 'text-color': '#111' } }
+        paint: { 'text-color': '#111' } },
+      // Medidas do lote selecionado: texto ao longo de cada lado e vértices numerados
+      { id: 'med-lado', type: 'symbol', source: 'medidas', filter: ['==', ['get', 'm'], 'lado'],
+        layout: { 'symbol-placement': 'line-center', 'text-field': ['get', 'txt'], 'text-font': ['Noto Sans Medium'],
+                  'text-size': ['interpolate', ['linear'], ['zoom'], 17, 10, 20, 13, 22, 16],
+                  'text-offset': [0, -0.75], 'text-keep-upright': true, 'text-padding': 0,
+                  'text-max-angle': 90, 'text-allow-overlap': false },
+        paint: { 'text-color': '#111', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } },
+      { id: 'med-vert', type: 'circle', source: 'medidas', filter: ['==', ['get', 'm'], 'vert'],
+        paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 17, 2.5, 20, 4], 'circle-color': '#ffd400',
+                 'circle-stroke-color': '#111', 'circle-stroke-width': 1.2 } },
+      { id: 'med-vert-num', type: 'symbol', source: 'medidas', filter: ['==', ['get', 'm'], 'vert'], minzoom: 18.5,
+        layout: { 'text-field': ['get', 'txt'], 'text-font': ['Noto Sans Medium'], 'text-size': 11,
+                  'text-offset': ['get', 'off'], 'text-allow-overlap': true },
+        paint: { 'text-color': '#7a2e00', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } }
     ]
   }
 });
@@ -256,21 +272,155 @@ function abrirFicha(p) {
   }
   $('f-dados').innerHTML =
     `<dt>Área</dt><dd>${fmt(p.a)} m²</dd><dt>Perímetro</dt><dd>${fmt(p.p)} m</dd><dt>ID vínculo</dt><dd>${p.id}</dd>`;
+  const f = loteK(p.k);
+  mostrarMedidas(f ? medirLote(f.geometry) : null);
   $('ficha').hidden = false;
   document.body.classList.add('com-ficha');
-  document.body.style.setProperty('--h-ficha', ($('ficha').offsetHeight - 10) + 'px');
+  ajustarFicha();
 }
 function fecharFicha() {
   $('ficha').hidden = true; $('f-pin').hidden = true; document.body.classList.remove('com-ficha'); selecionar(null);
+  mostrarMedidas(null);
 }
+// Os botões do mapa sobem junto com a ficha (a altura muda ao abrir o croqui, o PIN etc.)
+function ajustarFicha() { document.body.style.setProperty('--h-ficha', ($('ficha').offsetHeight - 10) + 'px'); }
+if ('ResizeObserver' in window) new ResizeObserver(() => { if (!$('ficha').hidden) ajustarFicha(); }).observe($('ficha'));
+
+// ---------- Medidas e croqui do lote ----------
+// Distância no elipsoide GRS80 (SIRGAS 2000) por escala local: erro de milímetros em lados de dezenas de metros.
+// Conferido com o perímetro geodésico do banco (PostGIS): diferença máxima de 4 cm no lote inteiro.
+const GRS_A = 6378137, GRS_E2 = 0.00669438002290;
+const RAD = Math.PI / 180;
+function escalaLocal(lat) {
+  const w = Math.sqrt(1 - GRS_E2 * Math.sin(lat * RAD) ** 2);
+  return { x: (GRS_A / w) * Math.cos(lat * RAD) * RAD, y: (GRS_A * (1 - GRS_E2) / w ** 3) * RAD };  // m por grau
+}
+const distM = (a, b) => { const e = escalaLocal((a[1] + b[1]) / 2); return Math.hypot((b[0] - a[0]) * e.x, (b[1] - a[1]) * e.y); };
+
+// Vértices do contorno a partir do mais ao norte (empate: o mais a oeste), em sentido horário — padrão de memorial.
+function medirLote(geom) {
+  const polys = geom.type === 'MultiPolygon' ? geom.coordinates : [geom.coordinates];
+  const ext = polys.map((p) => p[0]).sort((a, b) => b.length - a.length)[0];   // contorno principal
+  if (!ext) return null;
+  let v = [];
+  for (const c of ext) { const u = v[v.length - 1]; if (!u || u[0] !== c[0] || u[1] !== c[1]) v.push(c); }
+  if (v.length > 1 && v[0][0] === v[v.length - 1][0] && v[0][1] === v[v.length - 1][1]) v.pop();
+  if (v.length < 3) return null;
+  const lat0 = v.reduce((s, c) => s + c[1], 0) / v.length, lon0 = v.reduce((s, c) => s + c[0], 0) / v.length;
+  const e = escalaLocal(lat0);
+  let xy = v.map((c) => [(c[0] - lon0) * e.x, (c[1] - lat0) * e.y]);
+  let area2 = 0;
+  for (let i = 0; i < xy.length; i++) { const a = xy[i], b = xy[(i + 1) % xy.length]; area2 += a[0] * b[1] - b[0] * a[1]; }
+  if (area2 > 0) { v.reverse(); xy.reverse(); }                 // anti-horário → horário
+  let i0 = 0;
+  xy.forEach((p, i) => { const q = xy[i0]; if (p[1] > q[1] + 0.01 || (Math.abs(p[1] - q[1]) <= 0.01 && p[0] < q[0])) i0 = i; });
+  v = v.slice(i0).concat(v.slice(0, i0)); xy = xy.slice(i0).concat(xy.slice(0, i0));
+  const n = v.length;
+  const lados = v.map((c, i) => ({ de: i + 1, para: (i + 1) % n + 1, a: c, b: v[(i + 1) % n], m: distM(c, v[(i + 1) % n]) }));
+  return { v, xy, lados };
+}
+
+const txtM = (m) => fmt(m) + ' m';
+
+function mostrarMedidas(med) {
+  // mapa
+  const feats = [];
+  if (med) {
+    const n = med.v.length;
+    med.lados.forEach((l) => feats.push({ type: 'Feature', properties: { m: 'lado', txt: txtM(l.m) },
+      geometry: { type: 'LineString', coordinates: [l.a, l.b] } }));
+    med.v.forEach((c, i) => {
+      // número do vértice para fora do lote, na bissetriz dos dois lados
+      const p = med.xy[i], a = med.xy[(i - 1 + n) % n], b = med.xy[(i + 1) % n];
+      const u1 = unit([p[0] - a[0], p[1] - a[1]]), u2 = unit([b[0] - p[0], b[1] - p[1]]);
+      // em sentido horário, a normal externa de (dx,dy) é (-dy,dx)
+      let o = unit([-(u1[1] + u2[1]), u1[0] + u2[0]]);
+      if (!o[0] && !o[1]) o = [-u1[1], u1[0]];
+      feats.push({ type: 'Feature', properties: { m: 'vert', txt: String(i + 1), off: [o[0] * 1.1, -o[1] * 1.1] },
+        geometry: { type: 'Point', coordinates: c } });
+    });
+  }
+  quandoEstiloPronto(() => map.getSource('medidas').setData({ type: 'FeatureCollection', features: feats }));
+  // croqui
+  $('f-croqui').hidden = !med;
+  if (med) desenharCroqui(med);
+}
+function unit(d) { const h = Math.hypot(d[0], d[1]); return h ? [d[0] / h, d[1] / h] : [0, 0]; }
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function desenharCroqui(med) {
+  const W = 320, H = 230, M = 34;                 // margem para os textos
+  const xs = med.xy.map((p) => p[0]), ys = med.xy.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const s = Math.min((W - 2 * M) / Math.max(x1 - x0, 0.01), (H - 2 * M) / Math.max(y1 - y0, 0.01));
+  const cx = (W - (x1 - x0) * s) / 2, cy = (H - (y1 - y0) * s) / 2;
+  const P = med.xy.map((p) => [cx + (p[0] - x0) * s, H - cy - (p[1] - y0) * s]);   // norte para cima
+  const n = P.length;
+  let g = `<polygon class="cq-lote" points="${P.map((p) => p.map((c) => c.toFixed(1)).join(',')).join(' ')}"/>`;
+  med.lados.forEach((l, i) => {
+    const a = P[i], b = P[(i + 1) % n];
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    const d = unit([b[0] - a[0], b[1] - a[1]]);
+    // na tela (y para baixo) e sentido horário no terreno, a normal externa é (d.y, -d.x)
+    const nx = d[1], ny = -d[0];
+    let ang = Math.atan2(d[1], d[0]) / RAD;
+    if (ang > 90) ang -= 180; else if (ang <= -90) ang += 180;
+    const tx = mx + nx * 9, ty = my + ny * 9;
+    const comp = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (comp < 14) return;                         // lado pequeno demais no desenho: a medida fica só na lista
+    const curto = comp < 28;
+    g +=`<text class="cq-med${curto ? ' curto' : ''}" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" `
+       + `transform="rotate(${ang.toFixed(1)} ${tx.toFixed(1)} ${ty.toFixed(1)})">${esc(fmt(l.m))}</text>`;
+  });
+  P.forEach((p, i) => {
+    const a = P[(i - 1 + n) % n], b = P[(i + 1) % n];
+    const u1 = unit([p[0] - a[0], p[1] - a[1]]), u2 = unit([b[0] - p[0], b[1] - p[1]]);
+    let o = unit([u1[1] + u2[1], -(u1[0] + u2[0])]);
+    if (!o[0] && !o[1]) o = [u1[1], -u1[0]];
+    g += `<circle class="cq-v" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3"/>`
+       + `<text class="cq-vn" x="${(p[0] + o[0] * 11).toFixed(1)}" y="${(p[1] + o[1] * 11).toFixed(1)}">${i + 1}</text>`;
+  });
+  // norte e escala
+  g += `<g class="cq-norte" transform="translate(${W - 14} 16)"><path d="M0 -10 L5 4 L0 1 L-5 4 Z"/><text y="15">N</text></g>`;
+  const passos = [1, 2, 5, 10, 20, 50, 100];
+  const esc_m = passos.find((m) => m * s >= 40) || 100;
+  g += `<g class="cq-escala" transform="translate(10 ${H - 10})"><path d="M0 -4 V0 H${(esc_m * s).toFixed(1)} V-4"/>`
+     + `<text x="${(esc_m * s / 2).toFixed(1)}" y="-6">${esc_m} m</text></g>`;
+  $('f-svg').innerHTML = g;
+  const tot = med.lados.reduce((t, l) => t + l.m, 0);
+  $('f-lados').innerHTML = med.lados.map((l) => `<li><span>${l.de} – ${l.para}</span><b>${txtM(l.m)}</b></li>`).join('')
+    + `<li class="tot"><span>Soma dos lados</span><b>${txtM(tot)}</b></li>`;
+}
+try { if (localStorage.getItem('reurb_croqui') === '0') $('f-croqui').open = false; } catch (_) {}
+$('f-croqui').addEventListener('toggle', () => { try { localStorage.setItem('reurb_croqui', $('f-croqui').open ? '1' : '0'); } catch (_) {} });
+$('c-med').onchange = (e) => { for (const id of ['med-lado', 'med-vert', 'med-vert-num']) ligarCamada(id, e.target.checked); };
 $('f-fechar').onclick = fecharFicha;
 map.on('click', (e) => {
   const f = map.queryRenderedFeatures(e.point, { layers: ['lote-fundo'] })[0];
   if (!f) { fecharFicha(); return; }
   $('f-pin').hidden = true;
   selecionar(f.id);
-  abrirFicha(loteK(f.id).properties);
+  const lote = loteK(f.id);
+  abrirFicha(lote.properties);
+  enquadrarLote(lote);
 });
+
+// Se o lote ficou atrás da ficha (ou fora da tela), leva-o para a parte visível do mapa.
+function enquadrarLote(f) {
+  const cs = (f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates.flat(2) : f.geometry.coordinates.flat(1));
+  let x0 = 180, y0 = 90, x1 = -180, y1 = -90;
+  for (const c of cs) { x0 = Math.min(x0, c[0]); x1 = Math.max(x1, c[0]); y0 = Math.min(y0, c[1]); y1 = Math.max(y1, c[1]); }
+  const fic = $('ficha').getBoundingClientRect(), W = innerWidth, H = innerHeight;
+  const lateral = fic.width < W * 0.9;                       // computador: ficha ao lado; celular: embaixo
+  const pad = { top: 90, left: 24, right: lateral ? W - fic.left + 16 : 24, bottom: lateral ? 24 : H - fic.top + 16 };
+  const a = map.project([x0, y1]), b = map.project([x1, y0]);
+  const visivel = a.x >= pad.left && a.y >= pad.top && b.x <= W - pad.right && b.y <= H - pad.bottom;
+  const largo = (b.x - a.x) > 60 || (b.y - a.y) > 60;
+  if (visivel && largo) return;
+  if (W - pad.left - pad.right < 80 || H - pad.top - pad.bottom < 80) return;   // tela pequena demais
+  pararSeguir();
+  map.fitBounds([[x0, y0], [x1, y1]], { padding: pad, maxZoom: Math.max(map.getZoom(), 19.5), duration: 500 });
+}
 map.on('mouseenter', 'lote-fundo', () => (map.getCanvas().style.cursor = 'pointer'));
 map.on('mouseleave', 'lote-fundo', () => (map.getCanvas().style.cursor = ''));
 

@@ -37,6 +37,7 @@
   <label><input type="checkbox" id="c-sat"> Satélite (apoio)</label>
   <label><input type="checkbox" id="c-num" checked> Números dos lotes</label>
   <label><input type="checkbox" id="c-sit" checked> Situação do cadastro</label>
+  <label><input type="checkbox" id="c-med" checked> Medidas do lote</label>
 </div>
 
 <div class="precisao chip" id="precisao" hidden></div>
@@ -57,6 +58,11 @@
     <small id="f-pin-msg"></small>
   </form>
   <dl id="f-dados"></dl>
+  <details class="f-croqui" id="f-croqui" open>
+    <summary>Croqui e medidas</summary>
+    <svg id="f-svg" viewBox="0 0 320 230" role="img" aria-label="Croqui do lote com as medidas dos lados"></svg>
+    <ol class="f-lados" id="f-lados"></ol>
+  </details>
 </section>
 
 <div class="aviso" id="aviso" hidden></div>
