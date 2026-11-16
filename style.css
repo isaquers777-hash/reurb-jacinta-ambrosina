@@ -62,21 +62,63 @@ body.com-ficha .precisao{display:none}
 .sit.nada{background:var(--linha);color:var(--suave)}
 @media (prefers-color-scheme: dark){ .sit.cad{color:#4ade80} .sit.emc{color:#fb923c} }
 
-.f-acoes{display:flex;gap:8px;margin:0 0 14px}
-.f-acoes button{flex:1;min-height:42px;border-radius:12px;border:1.5px solid var(--linha);background:transparent;
-  color:var(--texto);font:600 14px/1.1 system-ui,sans-serif;cursor:pointer;padding:6px 8px}
-.f-acoes .b-cad{border-color:#16a34a} .f-acoes .b-emc{border-color:#f97316}
-.f-acoes .b-cad.ativo{background:#16a34a;color:#fff} .f-acoes .b-emc.ativo{background:#f97316;color:#fff}
-.f-acoes .b-limpar{flex:0 0 auto;color:var(--suave)}
+.f-sit .nota{flex-basis:100%;margin-top:-4px}
+.f-acoes{display:flex;gap:8px;margin:0 0 10px}
+.f-acoes button{flex:1;min-height:44px;border-radius:12px;border:0;cursor:pointer;padding:6px 10px;
+  font:600 14px/1.1 system-ui,sans-serif}
+.f-acoes .b-form{background:#f97316;color:#fff}
+.f-acoes .b-fin{background:#16a34a;color:#fff}
 .f-acoes button:active{transform:scale(.97)}
+.b-limpar{display:block;margin:0 0 12px;padding:4px 0;border:0;background:none;color:var(--suave);
+  font:500 13px system-ui,sans-serif;text-decoration:underline;cursor:pointer}
 
-.f-pin{margin:0 0 14px;display:flex;flex-direction:column;gap:6px}
-.f-pin label{font-size:13px;color:var(--suave)}
-.f-pin div{display:flex;gap:8px}
-.f-pin input{flex:1;min-width:0;height:42px;border-radius:10px;border:1.5px solid var(--linha);padding:0 12px;
-  font-size:18px;letter-spacing:.2em;background:transparent;color:var(--texto)}
-.f-pin button{height:42px;border:0;border-radius:10px;padding:0 16px;background:var(--azul);color:#fff;font-weight:600}
-.f-pin small{min-height:1em;color:#c2410c;font-size:12px}
+/* Formulário do cadastro: tela cheia no celular, janela no computador */
+.form-cad{position:fixed;inset:0;z-index:6;background:rgba(10,14,20,.45);display:flex;justify-content:center;align-items:stretch}
+.form-cad form{background:var(--fundo);width:100%;max-width:520px;display:flex;flex-direction:column;min-height:0}
+@media (min-width:700px){ .form-cad{align-items:center;padding:24px} .form-cad form{max-height:min(860px,100%);border-radius:18px;box-shadow:var(--sombra)} }
+.cad-topo{position:relative;padding:calc(env(safe-area-inset-top) + 14px) 18px 10px;border-bottom:1px solid var(--linha)}
+.cad-topo h2{margin:0 40px 4px 0;font-size:18px}
+.cad-nota{margin:0;font-size:13px;color:var(--suave)}
+.cad-corpo{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:14px 18px 8px;display:flex;flex-direction:column;gap:12px}
+.campo{display:flex;flex-direction:column;gap:5px;min-width:0}
+.campo>span,.grupo legend{font-size:13px;font-weight:600;color:var(--texto)}
+.campo input,.campo select{height:46px;border-radius:10px;border:1.5px solid rgba(127,127,127,.35);padding:0 12px;
+  font:16px system-ui,sans-serif;background:transparent;color:var(--texto);width:100%}
+.campo select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--suave) 50%),linear-gradient(135deg,var(--suave) 50%,transparent 50%);
+  background-position:calc(100% - 18px) 20px,calc(100% - 13px) 20px;background-size:5px 5px;background-repeat:no-repeat;padding-right:32px}
+.campo select option{color:#1b1f24}
+.campo input:focus,.campo select:focus{outline:none;border-color:var(--azul)}
+.campo input:disabled,.campo select:disabled{opacity:1;color:var(--texto);border-style:dashed}
+.campo em{display:none;font-style:normal;font-size:12px;color:#c2410c}
+.campo.erro em{display:block}
+.campo.erro input,.campo.erro select,.campo.erro .simnao{border-color:#dc2626}
+.linha{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.moeda{display:flex;align-items:center;border:1.5px solid rgba(127,127,127,.35);border-radius:10px;padding-left:12px}
+.moeda b{font-weight:600;color:var(--suave)} .moeda input{border:0;height:43px}
+.campo.erro .moeda{border-color:#dc2626}
+.grupo{border:1px solid var(--linha);border-radius:12px;padding:8px 12px 12px;margin:0;display:flex;flex-direction:column;gap:10px}
+.simnao{display:flex;gap:8px;border:1.5px solid transparent;border-radius:12px}
+.simnao label{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:46px;border-radius:10px;
+  border:1.5px solid rgba(127,127,127,.35);cursor:pointer;font-weight:600}
+.simnao input{width:18px;height:18px;accent-color:var(--azul);margin:0}
+.simnao label:has(input:checked){border-color:var(--azul);background:rgba(26,115,232,.1)}
+.cad-rodape{display:flex;align-items:center;gap:10px;padding:12px 18px calc(env(safe-area-inset-bottom) + 12px);
+  border-top:1px solid var(--linha)}
+.cad-rodape small{flex:1;font-size:12px;color:#c2410c}
+.cad-rodape button,.dlg button{height:46px;border:0;border-radius:12px;padding:0 18px;background:var(--azul);color:#fff;
+  font:600 15px system-ui,sans-serif;cursor:pointer}
+.cad-rodape button:disabled{opacity:.6}
+button.sec{background:var(--linha);color:var(--texto)}
+
+/* Janela do PIN / código de administrador */
+.dlg-fundo{position:fixed;inset:0;z-index:7;background:rgba(10,14,20,.45);display:grid;place-items:center;padding:16px}
+.dlg{background:var(--fundo);border-radius:16px;box-shadow:var(--sombra);padding:18px;width:100%;max-width:340px;
+  display:flex;flex-direction:column;gap:8px}
+.dlg label{font-weight:600}
+.dlg input{height:46px;border-radius:10px;border:1.5px solid rgba(127,127,127,.35);padding:0 12px;font-size:18px;
+  letter-spacing:.2em;background:transparent;color:var(--texto)}
+.dlg small{min-height:1.2em;color:#c2410c;font-size:12px}
+.dlg div{display:flex;gap:8px;justify-content:flex-end}
 
 .ficha{max-height:56vh;max-height:56dvh;overflow-y:auto;overscroll-behavior:contain}
 @media (min-width:700px){ .ficha{max-height:calc(100vh - 60px)} }

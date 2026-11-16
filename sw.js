@@ -3,9 +3,9 @@
 //  - Página, código, configuração e lotes: rede primeiro (pegam a versão publicada mais nova);
 //    o que está guardado só entra quando não há sinal.
 //  - Ortofoto: não passa por aqui (leitura por faixa de bytes direto do PMTiles).
-const VERSAO = 'jacinta-v6';
+const VERSAO = 'jacinta-v7';
 const FIXOS = ['lib/maplibre-gl.js', 'lib/maplibre-gl.css', 'lib/pmtiles.js', 'fonts/Noto%20Sans%20Medium/0-255.pbf'];
-const PAGINA = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icon.svg', 'data/nucleo.geojson'];
+const PAGINA = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icon.svg', 'data/nucleo.geojson', 'data/ruas.geojson'];
 
 self.addEventListener('install', (e) => {
   // cache:'reload' ignora o cache HTTP do navegador e baixa do servidor.

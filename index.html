@@ -36,6 +36,7 @@
   <label><input type="checkbox" id="c-orto" checked> Ortofoto</label>
   <label><input type="checkbox" id="c-sat"> Satélite (apoio)</label>
   <label><input type="checkbox" id="c-num" checked> Números dos lotes</label>
+  <label><input type="checkbox" id="c-ruas" checked> Nomes das ruas</label>
   <label><input type="checkbox" id="c-sit" checked> Situação do cadastro</label>
   <label><input type="checkbox" id="c-med" checked> Medidas do lote</label>
 </div>
@@ -47,16 +48,10 @@
   <h2 id="f-titulo"></h2>
   <div class="f-sit" id="f-sit"></div>
   <div class="f-acoes" id="f-acoes" hidden>
-    <button type="button" class="b-cad" data-s="CADASTRADO">Cadastrado</button>
-    <button type="button" class="b-emc" data-s="EM CADASTRAMENTO">Em cadastramento</button>
-    <button type="button" class="b-limpar" data-s="" aria-label="Remover marcação">Limpar</button>
+    <button type="button" class="b-form" id="b-form">Preencher cadastro</button>
+    <button type="button" class="b-fin" id="b-fin">Confirmar cadastro</button>
   </div>
-  <form class="f-pin" id="f-pin" hidden autocomplete="off">
-    <label for="f-pin-in">PIN da equipe</label>
-    <div><input id="f-pin-in" type="password" inputmode="numeric" minlength="6" autocomplete="off" required>
-      <button type="submit">Confirmar</button></div>
-    <small id="f-pin-msg"></small>
-  </form>
+  <button type="button" class="b-limpar" id="b-limpar" hidden>Remover marcação (administrador)</button>
   <dl id="f-dados"></dl>
   <details class="f-croqui" id="f-croqui" open>
     <summary>Croqui e medidas</summary>
@@ -64,6 +59,75 @@
     <ol class="f-lados" id="f-lados"></ol>
   </details>
 </section>
+
+<!-- Formulário do cadastro: os dados ficam no banco, fora da parte pública do mapa -->
+<section class="form-cad" id="cad" hidden role="dialog" aria-modal="true" aria-labelledby="cad-titulo">
+  <form id="cad-form" novalidate autocomplete="off">
+    <header class="cad-topo">
+      <button type="button" class="fechar" id="cad-fechar" aria-label="Fechar">×</button>
+      <h2 id="cad-titulo">Cadastro</h2>
+      <p class="cad-nota" id="cad-nota"></p>
+    </header>
+    <div class="cad-corpo" id="cad-corpo">
+      <label class="campo" data-campo="nome"><span>Nome do responsável</span>
+        <input name="nome" autocomplete="off" autocapitalize="words" maxlength="120"><em>Informe o nome completo.</em></label>
+      <label class="campo" data-campo="escolaridade"><span>Escolaridade</span>
+        <select name="escolaridade">
+          <option value="">Selecione…</option>
+          <option>Sem escolaridade</option><option>Fundamental incompleto</option><option>Fundamental completo</option>
+          <option>Médio incompleto</option><option>Médio completo</option><option>Superior incompleto</option>
+          <option>Superior completo</option><option>Pós-graduação</option>
+        </select><em>Escolha a escolaridade.</em></label>
+      <label class="campo" data-campo="profissao"><span>Profissão</span>
+        <input name="profissao" maxlength="80" autocapitalize="sentences"><em>Informe a profissão (ou “Do lar”, “Desempregado”…).</em></label>
+      <div class="linha">
+        <label class="campo" data-campo="renda_tipo"><span>Renda · tipo</span>
+          <select name="renda_tipo">
+            <option value="">Selecione…</option>
+            <option>Emprego formal</option><option>Trabalho informal / autônomo</option><option>Aposentadoria / pensão</option>
+            <option>Benefício social</option><option>Sem renda</option><option>Outra</option>
+          </select><em>Escolha o tipo de renda.</em></label>
+        <label class="campo" data-campo="renda_valor"><span>Renda · valor mensal</span>
+          <div class="moeda"><b>R$</b><input name="renda_valor" inputmode="decimal" placeholder="0,00"></div>
+          <em>Informe o valor mensal.</em></label>
+      </div>
+      <label class="campo" data-campo="telefone"><span>Telefone</span>
+        <input name="telefone" type="tel" inputmode="tel" placeholder="(33) 99999-9999" maxlength="16"><em>Telefone com DDD (10 ou 11 dígitos).</em></label>
+      <fieldset class="grupo"><legend>Endereço</legend>
+        <label class="campo" data-campo="rua"><span>Rua</span>
+          <input name="rua" list="lista-ruas" maxlength="120"><em>Informe a rua.</em></label>
+        <div class="linha">
+          <label class="campo" data-campo="numero"><span>Número</span>
+            <input name="numero" maxlength="12" placeholder="ou S/N"><em>Informe o número (ou S/N).</em></label>
+          <label class="campo" data-campo="bairro"><span>Bairro</span>
+            <input name="bairro" maxlength="80"><em>Informe o bairro.</em></label>
+        </div>
+      </fieldset>
+      <div class="campo" data-campo="cadunico"><span>Tem CadÚnico?</span>
+        <div class="simnao"><label><input type="radio" name="cadunico" value="sim"> Sim</label>
+          <label><input type="radio" name="cadunico" value="nao"> Não</label></div><em>Responda sim ou não.</em></div>
+      <div class="campo" data-campo="bolsa_familia"><span>Recebe Bolsa Família?</span>
+        <div class="simnao"><label><input type="radio" name="bolsa_familia" value="sim"> Sim</label>
+          <label><input type="radio" name="bolsa_familia" value="nao"> Não</label></div><em>Responda sim ou não.</em></div>
+    </div>
+    <footer class="cad-rodape">
+      <small id="cad-msg"></small>
+      <button type="button" class="sec" id="cad-editar" hidden>Editar (administrador)</button>
+      <button type="submit" id="cad-salvar">Salvar cadastro</button>
+    </footer>
+  </form>
+  <datalist id="lista-ruas"></datalist>
+</section>
+
+<!-- Pede o PIN da equipe ou o código de administrador -->
+<div class="dlg-fundo" id="dlg" hidden>
+  <form class="dlg" id="dlg-form" autocomplete="off">
+    <label for="dlg-in" id="dlg-titulo">PIN da equipe</label>
+    <input id="dlg-in" type="password" inputmode="numeric" autocomplete="off">
+    <small id="dlg-msg"></small>
+    <div><button type="button" class="sec" id="dlg-cancelar">Cancelar</button><button type="submit">Confirmar</button></div>
+  </form>
+</div>
 
 <div class="aviso" id="aviso" hidden></div>
 

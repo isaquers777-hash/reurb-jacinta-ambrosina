@@ -53,7 +53,8 @@ const map = new maplibregl.Map({
       // promoteId 'k' (fid numérico do banco): o ID_VINCULO pode ter letra (ex.: 2A) e não serve de id interno
       nucleo: { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, promoteId: 'k' },
       // lados (LineString com a medida) e vértices numerados do lote selecionado
-      medidas: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
+      medidas: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      ruas: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
     },
     layers: [
       { id: 'fundo', type: 'background', paint: { 'background-color': '#e9ecee' } },
@@ -78,6 +79,13 @@ const map = new maplibregl.Map({
       { id: 'lote-sel', type: 'line', source: 'nucleo', filter: ['==', ['get', 't'], 'L'],
         paint: { 'line-color': '#ffd400', 'line-width': 3,
                  'line-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 1, 0] } },
+      // Nomes das ruas ao longo do eixo da via (o traçado já aparece na ortofoto)
+      { id: 'rua-nome', type: 'symbol', source: 'ruas', minzoom: 15.5, filter: ['!=', ['get', 'n'], ''],
+        layout: { 'symbol-placement': 'line', 'text-field': ['get', 'n'], 'text-font': ['Noto Sans Medium'],
+                  'text-size': ['interpolate', ['linear'], ['zoom'], 15.5, 10, 18, 12.5, 21, 15],
+                  'symbol-spacing': 320, 'text-max-angle': 35, 'text-keep-upright': true, 'text-padding': 4,
+                  'text-letter-spacing': 0.03 },
+        paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(20,24,30,.85)', 'text-halo-width': 1.6 } },
       { id: 'lote-num', type: 'symbol', source: 'nucleo', filter: ['==', ['get', 't'], 'L'], minzoom: 18,
         layout: { 'text-field': ['to-string', ['get', 'l']], 'text-font': ['Noto Sans Medium'],
                   'text-size': ['interpolate', ['linear'], ['zoom'], 18, 10, 21, 15], 'text-padding': 1 },
@@ -118,6 +126,8 @@ const gravar = (k, v) => { try { v == null ? localStorage.removeItem(k) : localS
 
 let dados = null;                      // FeatureCollection exibida
 let fila = ler(CHAVE_FILA, []);        // marcações feitas no aparelho e ainda não confirmadas pelo banco
+const CHAVE_FILA_FORM = 'reurb_fila_form:' + (C.dados.nucleo || C.titulo);
+let filaForm = ler(CHAVE_FILA_FORM, []);  // formulários salvos sem sinal (apagados do aparelho assim que chegam ao banco)
 let ultimaCarga = 0;
 
 async function rpc(funcao, corpo) {
@@ -151,17 +161,23 @@ function quandoEstiloPronto(cb) {
   if (map.getSource('nucleo')) cb(); else map.once('styledata', () => quandoEstiloPronto(cb));
 }
 
-// Marcações ainda pendentes valem por cima do que veio do banco.
+// Marcações e formulários ainda pendentes valem por cima do que veio do banco.
 function aplicarFila(fc) {
   const porId = new Map(fila.map((m) => [m.id, m]));
+  const forms = new Map(filaForm.map((m) => [m.id, m]));
   for (const f of fc.features) {
     const p = f.properties;
     if (p.t !== 'L') continue;
     delete p.pend;
-    if (!porId.has(p.id)) continue;
-    const m = porId.get(p.id);
-    if (m.s) p.s = m.s; else delete p.s;
-    p.em = m.em; p.pend = true;
+    if (porId.has(p.id)) {
+      const m = porId.get(p.id);
+      if (m.s) p.s = m.s; else delete p.s;
+      p.em = m.em; p.pend = true;
+    }
+    if (forms.has(p.id)) {          // formulário salvo sem sinal: o lote já aparece em cadastramento
+      if (p.f !== 2) { p.s = 'EM CADASTRAMENTO'; p.f = 1; }
+      p.em = forms.get(p.id).em; p.pend = true;
+    }
   }
   return fc;
 }
@@ -228,6 +244,36 @@ function ligarCamada(id, on) { if (map.getLayer(id)) map.setLayoutProperty(id, '
 $('c-orto').onchange = (e) => ligarCamada('orto', e.target.checked);
 $('c-sat').onchange = (e) => ligarCamada('sat', e.target.checked);
 $('c-num').onchange = (e) => ligarCamada('lote-num', e.target.checked);
+$('c-ruas').onchange = (e) => ligarCamada('rua-nome', e.target.checked);
+
+// Ruas: rótulos no mapa e sugestão de endereço no cadastro (rua mais próxima do lote).
+let ruas = [];
+if (C.ruas) {
+  fetch(new URL(C.ruas, base).href).then((r) => r.ok ? r.json() : null).then((fc) => {
+    if (!fc) return;
+    ruas = fc.features.filter((f) => f.properties.n);
+    quandoEstiloPronto(() => map.getSource('ruas').setData(fc));
+    const nomes = [...new Set(ruas.map((f) => f.properties.n))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    $('lista-ruas').innerHTML = nomes.map((n) => `<option value="${esc(n)}">`).join('');
+  }).catch(() => {});
+}
+// Rua mais próxima de qualquer vértice do lote (a testada encosta na rua de frente).
+function ruaMaisProxima(pts) {
+  const e = escalaLocal(pts[0][1]);
+  let melhor = null, dMin = Infinity;
+  for (const f of ruas) {
+    const c = f.geometry.coordinates;
+    for (const pt of pts) for (let i = 1; i < c.length; i++) {
+      const ax = (c[i - 1][0] - pt[0]) * e.x, ay = (c[i - 1][1] - pt[1]) * e.y;
+      const bx = (c[i][0] - pt[0]) * e.x, by = (c[i][1] - pt[1]) * e.y;
+      const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+      const t = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+      const d = Math.hypot(ax + t * dx, ay + t * dy);
+      if (d < dMin) { dMin = d; melhor = f.properties.n; }
+    }
+  }
+  return dMin < 80 ? melhor : '';
+}
 $('c-sit').onchange = (e) => { ligarCamada('lote-sit', e.target.checked); ligarCamada('lote-sit-fundo', e.target.checked); };
 $('b-camadas').onclick = (e) => { e.stopPropagation(); $('p-camadas').hidden = !$('p-camadas').hidden; };
 document.addEventListener('click', (e) => { if (!$('p-camadas').contains(e.target)) $('p-camadas').hidden = true; });
@@ -240,7 +286,7 @@ function atualizarContagem() {
     if (f.properties.t !== 'L') continue;
     if (f.properties.s === 'CADASTRADO') cad++; else if (f.properties.s === 'EM CADASTRAMENTO') emc++;
   }
-  const pend = fila.length;
+  const pend = fila.length + filaForm.length;
   const partes = [];
   if (cad) partes.push(`<i style="background:${COR_CAD}"></i>${cad} cadastrado${cad === 1 ? '' : 's'}`);
   if (emc) partes.push(`<i style="background:${COR_EMC}"></i>${emc} em cadastramento`);
@@ -264,12 +310,15 @@ function abrirFicha(p) {
   const sit = p.s ? `<span class="sit ${p.s === 'CADASTRADO' ? 'cad' : 'emc'}">${NOME_SIT[p.s]}</span>`
                   : '<span class="sit nada">Sem marcação</span>';
   const quando = p.em ? `<small>${p.pend ? 'aguardando envio · ' : ''}${fmtData(p.em)}</small>` : '';
-  $('f-sit').innerHTML = sit + quando;
+  const fo = p.f || 0;
+  const nota = fo === 2 ? 'Confirmado pelo administrador'
+             : fo === 1 ? 'Formulário preenchido · aguardando confirmação'
+             : p.s === 'CADASTRADO' ? 'Marcado antes do formulário' : '';
+  $('f-sit').innerHTML = sit + quando + (nota ? `<small class="nota">${nota}</small>` : '');
   $('f-acoes').hidden = !SB;
-  for (const b of $('f-acoes').querySelectorAll('button')) {
-    b.classList.toggle('ativo', (b.dataset.s || null) === (p.s || null) && !!b.dataset.s);
-    if (!b.dataset.s) b.hidden = !p.s;
-  }
+  $('b-form').textContent = fo === 0 ? 'Preencher cadastro' : fo === 2 ? 'Ver cadastro' : 'Ver / editar cadastro';
+  $('b-fin').hidden = !(fo === 1 && !p.pend);
+  $('b-limpar').hidden = !SB || !p.s || !!p.pend;
   $('f-dados').innerHTML =
     `<dt>Área</dt><dd>${fmt(p.a)} m²</dd><dt>Perímetro</dt><dd>${fmt(p.p)} m</dd><dt>ID vínculo</dt><dd>${p.id}</dd>`;
   const f = loteK(p.k);
@@ -279,7 +328,7 @@ function abrirFicha(p) {
   ajustarFicha();
 }
 function fecharFicha() {
-  $('ficha').hidden = true; $('f-pin').hidden = true; document.body.classList.remove('com-ficha'); selecionar(null);
+  $('ficha').hidden = true; document.body.classList.remove('com-ficha'); selecionar(null);
   mostrarMedidas(null);
 }
 // Os botões do mapa sobem junto com a ficha (a altura muda ao abrir o croqui, o PIN etc.)
@@ -398,7 +447,6 @@ $('f-fechar').onclick = fecharFicha;
 map.on('click', (e) => {
   const f = map.queryRenderedFeatures(e.point, { layers: ['lote-fundo'] })[0];
   if (!f) { fecharFicha(); return; }
-  $('f-pin').hidden = true;
   selecionar(f.id);
   const lote = loteK(f.id);
   abrirFicha(lote.properties);
@@ -424,85 +472,287 @@ function enquadrarLote(f) {
 map.on('mouseenter', 'lote-fundo', () => (map.getCanvas().style.cursor = 'pointer'));
 map.on('mouseleave', 'lote-fundo', () => (map.getCanvas().style.cursor = ''));
 
-// ---------- Marcação de cadastro ----------
-$('f-acoes').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b || selecionado === null) return;
-  marcar(selecionado, b.dataset.s || null);
+// ---------- Cadastro do lote ----------
+// Regras (garantidas também no banco):
+//   · "Preencher cadastro" pede o formulário completo; ao salvar, o lote fica EM CADASTRAMENTO.
+//   · Só o código de administrador confirma o cadastro (CADASTRADO), corrige um cadastro confirmado
+//     ou remove a marcação.
+//   · Os dados do formulário só saem do banco com o PIN; nunca entram na parte pública do mapa.
+$('b-form').onclick = () => { if (selecionado !== null) abrirFormulario(selecionado); };
+$('b-fin').onclick = () => { if (selecionado !== null) finalizar(selecionado); };
+$('b-limpar').onclick = () => { if (selecionado !== null) limparMarcacao(selecionado); };
+
+const loteId = (id) => dados && dados.features.find((x) => x.properties.t === 'L' && x.properties.id === id);
+function atualizarLote(id, r) {
+  const f = loteId(id); if (!f) return;
+  const p = f.properties; delete p.pend;
+  if (r.s) p.s = r.s; else delete p.s;
+  p.em = r.em; if (r.f != null) p.f = r.f;
+}
+const offline = (e) => !e.status;    // erro sem resposta do servidor = sem sinal
+
+// --- Pedido do PIN da equipe / código de administrador ---
+let dlgCb = null, dlgModo = 'equipe';
+function pedirCodigo(modo, cb) {
+  dlgModo = modo; dlgCb = cb;
+  $('dlg-titulo').textContent = modo === 'admin' ? 'Código de administrador' : 'PIN da equipe';
+  $('dlg-msg').textContent = '';
+  $('dlg-in').value = ''; $('dlg').hidden = false; $('dlg-in').focus();
+}
+$('dlg-cancelar').onclick = () => { $('dlg').hidden = true; dlgCb = null; };
+$('dlg-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const cod = $('dlg-in').value.trim();
+  const min = dlgModo === 'admin' ? 8 : 6;
+  if (cod.length < min) {
+    $('dlg-msg').textContent = dlgModo === 'admin' ? 'Digite o código de administrador (8 dígitos). O PIN da equipe não confirma cadastros.'
+                                                  : 'O PIN tem pelo menos 6 caracteres.';
+    return;
+  }
+  $('dlg-msg').textContent = 'Conferindo…';
+  let papel = null;
+  try { papel = await comTempo(rpc('reurb_papel', { p_codigo: cod }), 12000); }
+  catch (err) {
+    if (!offline(err)) { $('dlg-msg').textContent = err.msg || 'Não foi possível conferir.'; return; }
+    if (dlgModo === 'admin') { $('dlg-msg').textContent = 'Sem conexão: a confirmação do administrador precisa de internet.'; return; }
+    papel = 'equipe';            // sem sinal: guarda o PIN e o banco confere no envio
+  }
+  if (!papel) { $('dlg-msg').textContent = dlgModo === 'admin' ? 'Código incorreto.' : 'PIN incorreto.'; return; }
+  if (dlgModo === 'admin' && papel !== 'admin') { $('dlg-msg').textContent = 'Este é o PIN da equipe, não o código de administrador.'; return; }
+  if (dlgModo === 'equipe') gravar(CHAVE_PIN, cod);
+  $('dlg').hidden = true;
+  const cb = dlgCb; dlgCb = null; if (cb) cb(cod);
 });
 
-function marcar(k, s) {
-  const f = loteK(k); if (!f) return;
-  if (!ler(CHAVE_PIN, null)) return pedirPin(() => marcar(k, s));
-  const p = f.properties;
-  if ((p.s || null) === s) return;
-  const em = new Date().toISOString();
-  fila = fila.filter((m) => m.id !== p.id).concat([{ id: p.id, s, em }]);
-  gravar(CHAVE_FILA, fila);
-  aplicarFila(dados);
-  redesenhar();
-  enviarFila();
+// --- Formulário ---
+const CAMPOS = ['nome', 'escolaridade', 'profissao', 'renda_tipo', 'renda_valor', 'telefone', 'rua', 'numero', 'bairro', 'cadunico', 'bolsa_familia'];
+const fm = $('cad-form');
+let cadLote = null;       // { k, id, finalizado }
+let cadCodigoAdmin = null; // só vale enquanto o formulário está aberto
+
+const soDigitos = (s) => String(s || '').replace(/\D/g, '');
+function mascaraTel(s) {
+  const d = soDigitos(s).slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : '';
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+fm.telefone.addEventListener('input', () => { fm.telefone.value = mascaraTel(fm.telefone.value); });
+const lerValor = (s) => {
+  const t = String(s || '').trim().replace(/\s|R\$/g, '');
+  if (!t) return null;
+  const n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+  return Number.isFinite(n) ? n : NaN;
+};
+const mostrarValor = (n) => n == null ? '' : Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function ajustarRenda() {
+  const sem = fm.renda_tipo.value === 'Sem renda';
+  fm.querySelector('[data-campo="renda_valor"]').hidden = sem;
+}
+fm.renda_tipo.addEventListener('change', ajustarRenda);
+const simNao = (nome) => { const r = fm.querySelector(`input[name="${nome}"]:checked`); return r ? r.value === 'sim' : null; };
+const marcarSimNao = (nome, v) => { for (const r of fm.querySelectorAll(`input[name="${nome}"]`)) r.checked = v != null && r.value === (v ? 'sim' : 'nao'); };
+
+function lerFormulario() {
+  return {
+    nome: fm.nome.value.trim(), escolaridade: fm.escolaridade.value, profissao: fm.profissao.value.trim(),
+    renda_tipo: fm.renda_tipo.value,
+    renda_valor: fm.renda_tipo.value === 'Sem renda' ? 0 : lerValor(fm.renda_valor.value),
+    telefone: soDigitos(fm.telefone.value),
+    rua: fm.rua.value.trim(), numero: fm.numero.value.trim(), bairro: fm.bairro.value.trim(),
+    cadunico: simNao('cadunico'), bolsa_familia: simNao('bolsa_familia')
+  };
+}
+function preencherFormulario(d) {
+  fm.nome.value = d.nome || ''; fm.escolaridade.value = d.escolaridade || ''; fm.profissao.value = d.profissao || '';
+  fm.renda_tipo.value = d.renda_tipo || '';
+  fm.renda_valor.value = d.renda_tipo === 'Sem renda' ? '' : mostrarValor(d.renda_valor);
+  fm.telefone.value = mascaraTel(d.telefone); fm.rua.value = d.rua || ''; fm.numero.value = d.numero || '';
+  fm.bairro.value = d.bairro || '';
+  marcarSimNao('cadunico', d.cadunico); marcarSimNao('bolsa_familia', d.bolsa_familia);
+  ajustarRenda();
+}
+// Mesmas regras do banco (reurb_validar_formulario).
+function validar(d) {
+  const erros = [];
+  if (d.nome.length < 3) erros.push('nome');
+  if (!d.escolaridade) erros.push('escolaridade');
+  if (d.profissao.length < 2) erros.push('profissao');
+  if (!d.renda_tipo) erros.push('renda_tipo');
+  if (d.renda_tipo && d.renda_tipo !== 'Sem renda' && !(d.renda_valor > 0)) erros.push('renda_valor');
+  if (d.telefone.length < 10 || d.telefone.length > 11) erros.push('telefone');
+  if (d.rua.length < 2) erros.push('rua');
+  if (!d.numero) erros.push('numero');
+  if (d.bairro.length < 2) erros.push('bairro');
+  if (d.cadunico == null) erros.push('cadunico');
+  if (d.bolsa_familia == null) erros.push('bolsa_familia');
+  return erros;
+}
+function marcarErros(erros) {
+  for (const el of fm.querySelectorAll('.campo')) el.classList.toggle('erro', erros.includes(el.dataset.campo));
+  if (erros.length) {
+    const el = fm.querySelector(`.campo[data-campo="${erros[0]}"]`);
+    if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); const i = el.querySelector('input,select'); if (i) i.focus({ preventScroll: true }); }
+  }
+}
+for (const el of fm.querySelectorAll('.campo')) {
+  el.addEventListener('input', () => el.classList.remove('erro'));
+  el.addEventListener('change', () => el.classList.remove('erro'));
+}
+function travarFormulario(travar) {
+  for (const el of fm.querySelectorAll('input,select')) el.disabled = travar;
+  $('cad-salvar').hidden = travar;
+  $('cad-editar').hidden = !travar;
 }
 
+async function abrirFormulario(k) {
+  const f = loteK(k); if (!f) return;
+  const pin = ler(CHAVE_PIN, null);
+  if (!pin) return pedirCodigo('equipe', () => abrirFormulario(k));
+  const p = f.properties;
+  cadLote = { k, id: p.id, finalizado: p.f === 2 };
+  cadCodigoAdmin = null;
+  fm.reset(); marcarErros([]); $('cad-msg').textContent = '';
+  $('cad-titulo').textContent = `Cadastro · Quadra ${p.q} · Lote ${p.l}`;
+  const pendente = filaForm.find((m) => m.id === p.id);
+  let nota = '';
+  if (pendente) { preencherFormulario(pendente.dados); nota = 'Salvo neste aparelho, aguardando envio ao banco.'; }
+  else if (p.f) {
+    $('cad-nota').textContent = 'Carregando o cadastro salvo…';
+    let r;
+    try { r = await comTempo(rpc('reurb_ler_formulario', { p_nucleo: C.dados.nucleo, p_id: p.id, p_pin: pin }), 12000); }
+    catch (e) { return aviso(offline(e) ? 'Sem conexão: o cadastro salvo só abre com internet.' : (e.msg || 'Não foi possível abrir o cadastro.'), 6000); }
+    if (r.erro === 'pin') { gravar(CHAVE_PIN, null); return pedirCodigo('equipe', () => abrirFormulario(k)); }
+    if (r.dados) preencherFormulario(r.dados);
+    nota = r.finalizado_em ? `Confirmado pelo administrador em ${fmtData(r.finalizado_em)}.`
+                           : `Salvo em ${fmtData(r.atualizado_em)} · aguardando confirmação do administrador.`;
+    cadLote.finalizado = !!r.finalizado_em;
+  } else {
+    // Cadastro novo: endereço já sugerido pela posição do lote
+    fm.bairro.value = C.bairro || '';
+    fm.rua.value = ruaMaisProxima(f.geometry.coordinates.flat(f.geometry.type === 'MultiPolygon' ? 2 : 1)) || '';
+    ajustarRenda();
+    nota = p.s === 'CADASTRADO'
+      ? 'Este lote foi marcado antes do formulário. Ao salvar, ele volta para “Em cadastramento” até o administrador confirmar.'
+      : 'Todos os campos são obrigatórios. Ao salvar, o lote fica “Em cadastramento”.';
+  }
+  $('cad-nota').textContent = nota;
+  travarFormulario(cadLote.finalizado);
+  if (cadLote.finalizado) $('cad-nota').textContent += ' Para corrigir, use o código de administrador.';
+  $('cad').hidden = false;
+  $('cad-corpo').scrollTop = 0;
+}
+function fecharFormulario() { $('cad').hidden = true; cadLote = null; cadCodigoAdmin = null; fm.reset(); }
+$('cad-fechar').onclick = fecharFormulario;
+$('cad-editar').onclick = () => pedirCodigo('admin', (cod) => { cadCodigoAdmin = cod; travarFormulario(false); $('cad-msg').textContent = 'Edição liberada pelo administrador.'; });
+
+fm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!cadLote) return;
+  const d = lerFormulario();
+  const erros = validar(d);
+  marcarErros(erros);
+  if (erros.length) { $('cad-msg').textContent = 'Preencha os campos destacados.'; return; }
+  const { id } = cadLote;
+  const em = new Date().toISOString();
+  $('cad-salvar').disabled = true; $('cad-msg').textContent = 'Salvando…';
+  try {
+    if (cadCodigoAdmin || cadLote.finalizado) {
+      // Correção pelo administrador: só com internet (o código não fica guardado no aparelho)
+      const r = await comTempo(rpc('reurb_salvar_formulario', { p_nucleo: C.dados.nucleo, p_id: id, p_dados: d, p_pin: cadCodigoAdmin }), 15000);
+      if (r.erro) { $('cad-msg').textContent = msgErro(r); return; }
+      atualizarLote(id, r);
+    } else {
+      // Equipe: entra na fila do aparelho e segue para o banco (na hora, ou quando o sinal voltar)
+      filaForm = filaForm.filter((m) => m.id !== id).concat([{ id, dados: d, em }]);
+      gravar(CHAVE_FILA_FORM, filaForm);
+      aplicarFila(dados);
+    }
+    redesenhar();
+    fecharFormulario();
+    aviso('Cadastro salvo. O lote está em cadastramento até o administrador confirmar.', 5000);
+    enviarFila();
+  } catch (err) {
+    $('cad-msg').textContent = offline(err) ? 'Sem conexão: a correção do administrador precisa de internet.' : (err.msg || 'O banco recusou o cadastro.');
+  } finally { $('cad-salvar').disabled = false; }
+});
+
+function msgErro(r) {
+  return ({
+    pin: 'PIN ou código incorreto.', admin: 'Só o código de administrador pode fazer isso.',
+    finalizado: 'Este cadastro já foi confirmado; só o administrador pode corrigir.',
+    sem_formulario: 'O lote ainda não tem formulário salvo.', lote: 'Este lote não existe mais no banco.',
+    campos: 'O banco recusou campos incompletos: ' + (r.campos || []).join(', '),
+    formulario: 'A marcação agora é feita pelo formulário do cadastro.'
+  })[r.erro] || 'O banco recusou a operação.';
+}
+
+// --- Confirmação e remoção (administrador) ---
+function finalizar(k) {
+  const f = loteK(k); if (!f) return;
+  const p = f.properties;
+  pedirCodigo('admin', async (cod) => {
+    try {
+      const r = await comTempo(rpc('reurb_finalizar', { p_nucleo: C.dados.nucleo, p_id: p.id, p_codigo: cod }), 15000);
+      if (r.erro) return aviso(msgErro(r), 6000);
+      atualizarLote(p.id, r); redesenhar();
+      aviso(`Cadastro do lote ${p.l} (quadra ${p.q}) confirmado.`, 4000);
+    } catch (e) { aviso(offline(e) ? 'Sem conexão: tente de novo com internet.' : (e.msg || 'Não foi possível confirmar.'), 6000); }
+  });
+}
+function limparMarcacao(k) {
+  const f = loteK(k); if (!f) return;
+  const p = f.properties;
+  pedirCodigo('admin', async (cod) => {
+    try {
+      const r = await comTempo(rpc('reurb_marcar', { p_nucleo: C.dados.nucleo, p_id: p.id, p_status: '', p_pin: cod }), 15000);
+      if (r.erro) return aviso(msgErro(r), 6000);
+      atualizarLote(p.id, r); redesenhar();
+      aviso('Marcação removida. O formulário, se houver, continua guardado.', 5000);
+    } catch (e) { aviso(offline(e) ? 'Sem conexão: tente de novo com internet.' : (e.msg || 'Não foi possível remover.'), 6000); }
+  });
+}
+
+// --- Envio do que ficou guardado no aparelho ---
 let enviando = false;
 async function enviarFila() {
-  if (!SB || enviando || !fila.length) return;
+  if (!SB || enviando || (!fila.length && !filaForm.length)) return;
   const pin = ler(CHAVE_PIN, null);
   if (!pin) return;
   enviando = true;
   try {
-    while (fila.length) {
-      const m = fila[0];
-      const r = await comTempo(rpc('reurb_marcar', { p_nucleo: C.dados.nucleo, p_id: m.id, p_status: m.s || '', p_pin: pin }), 15000);
+    while (filaForm.length) {
+      const m = filaForm[0];
+      const r = await comTempo(rpc('reurb_salvar_formulario', { p_nucleo: C.dados.nucleo, p_id: m.id, p_dados: m.dados, p_pin: pin }), 15000);
       if (r && r.erro === 'pin') {
         gravar(CHAVE_PIN, null);
-        aviso('PIN da equipe não confere. Toque no lote e marque de novo para digitar o PIN.', 6000);
+        aviso('PIN da equipe não confere. Abra um lote e salve de novo para digitar o PIN.', 6000);
         break;
       }
+      filaForm.shift(); gravar(CHAVE_FILA_FORM, filaForm);
+      if (r && r.erro) aviso(`Cadastro do lote de ID ${m.id} não foi salvo: ${msgErro(r)}`, 8000);
+      else atualizarLote(m.id, r);
+    }
+    // Marcações diretas guardadas por versões anteriores da página (antes do formulário)
+    while (fila.length && !filaForm.length) {
+      const m = fila[0];
+      const r = await comTempo(rpc('reurb_marcar', { p_nucleo: C.dados.nucleo, p_id: m.id, p_status: m.s || '', p_pin: pin }), 15000);
+      if (r && r.erro === 'pin') { gravar(CHAVE_PIN, null); break; }
       fila.shift(); gravar(CHAVE_FILA, fila);
-      const f = dados && dados.features.find((x) => x.properties.t === 'L' && x.properties.id === m.id);
-      if (r && r.erro === 'lote') aviso(`O lote de ID ${m.id} não existe mais no banco; marcação descartada.`, 6000);
-      else if (f && !fila.some((x) => x.id === m.id)) {
-        const p = f.properties; delete p.pend;
-        if (r.s) p.s = r.s; else delete p.s;
-        p.em = r.em;
-      }
+      if (r && r.erro) aviso(`Marcação do lote de ID ${m.id} não enviada: ${msgErro(r)}`, 6000);
+      else atualizarLote(m.id, r);
     }
   } catch (e) {
-    if (e.status) aviso(e.msg || 'O banco recusou a marcação. Tente de novo em instantes.', 6000);
-    // sem sinal: as marcações continuam guardadas no aparelho e seguem quando a conexão voltar
+    if (e.status) aviso(e.msg || 'O banco recusou o envio. Tente de novo em instantes.', 6000);
+    // sem sinal: continua guardado no aparelho e segue quando a conexão voltar
   } finally {
     enviando = false;
     if (dados) { aplicarFila(dados); redesenhar(); }
   }
-  // Se a tela estava com dados guardados (sem sinal), traz a versão atual do banco depois de enviar.
-  if (!doBanco && !fila.length) await atualizar(false);
+  if (!doBanco && !fila.length && !filaForm.length) await atualizar(false);
 }
-setInterval(() => { if (fila.length && navigator.onLine) enviarFila(); }, 30000);
-
-// PIN da equipe: pedido uma vez por aparelho, conferido no banco.
-let depoisDoPin = null;
-function pedirPin(cb) {
-  depoisDoPin = cb;
-  $('f-pin').hidden = false; $('f-pin-msg').textContent = '';
-  $('f-pin-in').value = ''; $('f-pin-in').focus();
-  document.body.style.setProperty('--h-ficha', ($('ficha').offsetHeight - 10) + 'px');
-}
-$('f-pin').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const pin = $('f-pin-in').value.trim();
-  if (pin.length < 6) { $('f-pin-msg').textContent = 'O PIN tem pelo menos 6 caracteres.'; return; }
-  $('f-pin-msg').textContent = 'Conferindo…';
-  try {
-    const ok = await comTempo(rpc('reurb_pin_ok', { p_pin: pin }), 12000);
-    if (!ok) { $('f-pin-msg').textContent = 'PIN incorreto.'; return; }
-  } catch (err) {
-    if (err.status) { $('f-pin-msg').textContent = err.msg || 'Não foi possível conferir o PIN.'; return; }
-    // sem sinal: guarda e confere no envio
-  }
-  gravar(CHAVE_PIN, pin);
-  $('f-pin').hidden = true;
-  const cb = depoisDoPin; depoisDoPin = null; if (cb) cb();
-});
+setInterval(() => { if ((fila.length || filaForm.length) && navigator.onLine) enviarFila(); }, 30000);
 
 // ---------- Avisos ----------
 let tAviso;

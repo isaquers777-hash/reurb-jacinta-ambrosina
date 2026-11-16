@@ -20,6 +20,10 @@ window.APP_CONFIG = {
     reserva: 'data/nucleo.geojson'
   },
 
+  // Nomes das ruas (levantamento da prefeitura, out/2023) e bairro sugerido no endereço do cadastro
+  ruas: 'data/ruas.geojson',
+  bairro: 'Jacinta Ambrosina',
+
   // Enquadramento inicial [oeste, sul, leste, norte] (WGS84)
   limites: [-42.16698, -17.59726, -42.16090, -17.59267]
 };
