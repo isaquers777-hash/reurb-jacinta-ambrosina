@@ -160,5 +160,56 @@ button.sec{background:var(--linha);color:var(--texto)}
   background:var(--azul);border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35)}
 .eu.velho .ponto{background:#8a9099}
 
+/* Anexos e lista de cadastros (mesma janela do formulário) */
+.form-cad .janela{background:var(--fundo);width:100%;max-width:520px;display:flex;flex-direction:column;min-height:0}
+.form-cad .janela.larga{max-width:760px}
+@media (min-width:700px){ .form-cad .janela{max-height:min(860px,100%);border-radius:18px;box-shadow:var(--sombra)} }
+.f-acoes2{margin-top:-2px}
+.f-acoes .b-anx{background:var(--azul);color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;flex:1.4}
+.f-acoes .b-anx svg{width:18px;height:18px;fill:currentColor}
+.f-acoes .b-zip{background:var(--linha);color:var(--texto)}
+.anx-novo{display:flex;flex-direction:column;gap:10px;border:1px solid var(--linha);border-radius:12px;padding:10px 12px 12px}
+.anx-botoes{display:flex;gap:8px}
+.anx-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border-radius:12px;cursor:pointer;
+  background:var(--linha);color:var(--texto);font-weight:600}
+.anx-btn.prim{background:var(--azul);color:#fff}
+.anx-btn svg{width:20px;height:20px;fill:currentColor}
+.anx-btn.ocupado{opacity:.55;pointer-events:none}
+.anx-dica{font-size:12px;color:var(--suave)}
+.anx-liberar{height:42px;border:0;border-radius:12px;font:600 14px system-ui,sans-serif;cursor:pointer}
+.anx-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.anx-lista li{display:flex;align-items:center;gap:10px;border:1px solid var(--linha);border-radius:12px;padding:8px}
+.anx-lista .vazio{border:0;color:var(--suave);font-size:14px;justify-content:center;padding:16px}
+.anx-mini{width:56px;height:56px;flex:none;border-radius:8px;background:var(--linha) center/cover no-repeat;
+  display:grid;place-items:center;font:700 12px system-ui,sans-serif;color:#b91c1c;cursor:pointer;border:0;padding:0}
+.anx-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.anx-info b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.anx-info span{font-size:12px;color:var(--suave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.anx-rem{width:36px;height:36px;flex:none;border:0;border-radius:50%;background:var(--linha);color:var(--texto);font-size:18px;cursor:pointer}
+.anx-lista li.enviando{opacity:.7}
+.anx-lista li.enviando .anx-info span{color:var(--azul)}
+.lst-filtros{display:flex;gap:8px;margin-top:10px}
+.lst-filtros input,.lst-filtros select{height:40px;border-radius:10px;border:1.5px solid rgba(127,127,127,.35);padding:0 10px;
+  font:15px system-ui,sans-serif;background:transparent;color:var(--texto);min-width:0}
+.lst-filtros input{flex:1}
+.lst-filtros select option{color:#1b1f24}
+.lst-corpo{padding-top:4px}
+.lst-tab{width:100%;border-collapse:collapse;font-size:14px}
+.lst-tab th{position:sticky;top:-4px;background:var(--fundo);text-align:left;font-size:12px;color:var(--suave);font-weight:600;
+  padding:6px 6px;border-bottom:1px solid var(--linha)}
+.lst-tab td{padding:9px 6px;border-bottom:1px solid var(--linha);vertical-align:middle}
+.lst-tab tbody tr{cursor:pointer}
+.lst-tab tbody tr:hover{background:rgba(127,127,127,.07)}
+.lst-tab input{width:18px;height:18px;accent-color:var(--azul)}
+.lst-tab td.nome{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lst-tab td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.lst-tab .sit{font-size:11px;padding:2px 8px;white-space:nowrap}
+.lst-rodape{flex-wrap:wrap}
+.lst-rodape small{flex-basis:100%;color:var(--suave)}
+.lst-rodape small.erro,#anx-msg.erro{color:#c2410c}
+#anx-msg{color:var(--suave)}
+.lst-rodape button{flex:1;padding:0 10px;font-size:14px;white-space:nowrap}
+.lst-rodape button:disabled{opacity:.5}
+
 .maplibregl-ctrl-attrib{font-size:10px}
 .maplibregl-ctrl-bottom-left{margin-bottom:env(safe-area-inset-bottom)}

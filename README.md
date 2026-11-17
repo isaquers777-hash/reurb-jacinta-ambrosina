@@ -61,3 +61,28 @@ A página não precisa de mais nenhuma alteração: os campos usados são `t` (L
 - **Tocar num lote** mostra quadra, lote, área, perímetro e ID vínculo.
 - **Camadas:** liga/desliga ortofoto, satélite de apoio (Esri, fora da área do drone) e números dos lotes.
   Com "economia de dados" ativada no celular, o satélite começa desligado.
+
+## Fotos e documentos do cadastro (anexos)
+
+Depende do `supabase/04_anexos.sql` aplicado no banco (bucket privado `reurb-anexos`).
+
+- Na ficha do lote, **Fotos e documentos** abre a lista de anexos do cadastro. **Tirar foto** abre a câmera do celular;
+  **Anexar arquivo** aceita JPG, JPEG, PNG ou PDF (até 15 MB, vários de uma vez). Fotos grandes são reduzidas para
+  2400 px antes do envio; HEIC/WebP da câmera viram JPG.
+- Cada anexo tem tipo (foto do imóvel, documento pessoal, comprovante…) e descrição opcional, e fica ligado ao **ID_VINCULO**:
+  sobrevive a recargas do vetor e a renumerações.
+- Usa o PIN da equipe. Cadastro já confirmado: só o código de administrador anexa ou remove.
+  Remover tira o anexo da lista, mas o arquivo continua guardado no bucket.
+- Precisa de internet (não entra na fila de envio sem sinal).
+
+## Listar e exportar os cadastros (código de administrador)
+
+- Botão de **lista** (acima do botão do núcleo): todos os lotes com responsável, situação e número de anexos;
+  busca por nome, quadra, lote ou ID e filtros (com cadastro, com anexos, em cadastramento, cadastrados, sem cadastro).
+  Tocar numa linha leva ao lote no mapa.
+- **Exportar (ZIP)** na ficha ou **Exportar este cadastro** na janela de anexos: um ZIP
+  `<RESPONSÁVEL> - QD <q> LT <l>.zip` com a pasta de mesmo nome, os anexos e `DADOS_CADASTRO.txt`
+  (lote, medidas dos lados, dados do formulário e lista dos anexos).
+- Em bloco (**Exportar selecionados** / **Exportar os listados**): um único `CADASTROS_<NÚCLEO>_<data>.zip`
+  com um ZIP por cadastro, `LISTA_CADASTROS.csv` e, se algum arquivo falhar, `AVISOS_EXPORTACAO.txt`.
+- **Lista (CSV)** baixa só a planilha da lista filtrada (abre no Excel, separador `;`).

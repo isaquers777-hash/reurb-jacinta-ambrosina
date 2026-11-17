@@ -22,6 +22,9 @@ window.APP_CONFIG = {
 
   // Nomes das ruas (levantamento da prefeitura, out/2023) e bairro sugerido no endereço do cadastro
   ruas: 'data/ruas.geojson',
+
+  // Fotos e documentos de cada cadastro (bucket privado do Supabase Storage, ver supabase/04_anexos.sql)
+  anexos: { bucket: 'reurb-anexos' },
   bairro: 'Jacinta Ambrosina',
 
   // Enquadramento inicial [oeste, sul, leste, norte] (WGS84)

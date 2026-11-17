@@ -24,6 +24,9 @@
   <button class="btn" id="b-camadas" aria-label="Camadas" title="Camadas">
     <svg viewBox="0 0 24 24"><path d="M12 3 2 8.5 12 14l10-5.5L12 3Zm-8.2 9.6L2 13.6 12 19l10-5.4-1.8-1L12 17l-8.2-4.4Z"/></svg>
   </button>
+  <button class="btn" id="b-lista" aria-label="Cadastros: listar e exportar" title="Cadastros: listar e exportar" hidden>
+    <svg viewBox="0 0 24 24"><path d="M4 5h2v2H4V5Zm4 0h12v2H8V5ZM4 11h2v2H4v-2Zm4 0h12v2H8v-2Zm-4 6h2v2H4v-2Zm4 0h12v2H8v-2Z"/></svg>
+  </button>
   <button class="btn" id="b-nucleo" aria-label="Ver o núcleo inteiro" title="Ver o núcleo inteiro">
     <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>
@@ -50,6 +53,12 @@
   <div class="f-acoes" id="f-acoes" hidden>
     <button type="button" class="b-form" id="b-form">Preencher cadastro</button>
     <button type="button" class="b-fin" id="b-fin">Confirmar cadastro</button>
+  </div>
+  <div class="f-acoes f-acoes2" id="f-acoes2" hidden>
+    <button type="button" class="b-anx" id="b-anx">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 6.5v9.8a4.5 4.5 0 0 1-9 0V5.8a3 3 0 0 1 6 0v9.7a1.5 1.5 0 0 1-3 0V7h-1.5v8.5a3 3 0 0 0 6 0V5.8a4.5 4.5 0 0 0-9 0v10.5a6 6 0 0 0 12 0V6.5h-1.5Z"/></svg>
+      Fotos e documentos</button>
+    <button type="button" class="b-zip" id="b-zip">Exportar (ZIP)</button>
   </div>
   <button type="button" class="b-limpar" id="b-limpar" hidden>Remover marcação (administrador)</button>
   <dl id="f-dados"></dl>
@@ -117,6 +126,81 @@
     </footer>
   </form>
   <datalist id="lista-ruas"></datalist>
+</section>
+
+<!-- Anexos do cadastro: fotos (câmera) e arquivos JPG, JPEG, PNG ou PDF, guardados no Supabase -->
+<section class="form-cad" id="anx" hidden role="dialog" aria-modal="true" aria-labelledby="anx-titulo">
+  <div class="janela">
+    <header class="cad-topo">
+      <button type="button" class="fechar" id="anx-fechar" aria-label="Fechar">×</button>
+      <h2 id="anx-titulo">Fotos e documentos</h2>
+      <p class="cad-nota" id="anx-nota"></p>
+    </header>
+    <div class="cad-corpo">
+      <div class="anx-novo" id="anx-novo">
+        <div class="linha">
+          <label class="campo"><span>Tipo do anexo</span>
+            <select id="anx-cat">
+              <option>Foto do imóvel</option><option>Foto da fachada</option>
+              <option>Documento pessoal (RG/CPF)</option><option>Comprovante de residência</option>
+              <option>Documento do imóvel</option><option>Certidão</option><option>Declaração</option><option>Outro</option>
+            </select></label>
+          <label class="campo"><span>Descrição (opcional)</span>
+            <input id="anx-desc" maxlength="300" autocomplete="off"></label>
+        </div>
+        <div class="anx-botoes">
+          <label class="anx-btn prim"><input type="file" id="anx-foto" accept="image/*" capture="environment" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg>
+            Tirar foto</label>
+          <label class="anx-btn"><input type="file" id="anx-arq" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" multiple hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V9h5.5L13 3.5ZM11 12v3H8v2h3v3h2v-3h3v-2h-3v-3h-2Z"/></svg>
+            Anexar arquivo</label>
+        </div>
+        <small class="anx-dica">JPG, JPEG, PNG ou PDF, até 15 MB. Fotos grandes são reduzidas antes do envio.</small>
+      </div>
+      <button type="button" class="sec anx-liberar" id="anx-liberar" hidden>Cadastro confirmado · liberar com o código de administrador</button>
+      <ul class="anx-lista" id="anx-lista"></ul>
+    </div>
+    <footer class="cad-rodape">
+      <small id="anx-msg"></small>
+      <button type="button" class="sec" id="anx-zip">Exportar este cadastro (ZIP)</button>
+    </footer>
+  </div>
+</section>
+
+<!-- Lista dos cadastros e exportação em bloco (código de administrador) -->
+<section class="form-cad" id="lst" hidden role="dialog" aria-modal="true" aria-labelledby="lst-titulo">
+  <div class="janela larga">
+    <header class="cad-topo">
+      <button type="button" class="fechar" id="lst-fechar" aria-label="Fechar">×</button>
+      <h2 id="lst-titulo">Cadastros do núcleo</h2>
+      <p class="cad-nota" id="lst-nota"></p>
+      <div class="lst-filtros">
+        <input id="lst-busca" type="search" placeholder="Buscar nome, quadra, lote ou ID" autocomplete="off">
+        <select id="lst-filtro">
+          <option value="cad">Com cadastro</option>
+          <option value="todos">Todos os lotes</option>
+          <option value="anx">Com anexos</option>
+          <option value="emc">Em cadastramento</option>
+          <option value="ok">Cadastrados</option>
+          <option value="sem">Sem cadastro</option>
+        </select>
+      </div>
+    </header>
+    <div class="cad-corpo lst-corpo">
+      <table class="lst-tab">
+        <thead><tr><th><input type="checkbox" id="lst-todos" aria-label="Selecionar todos"></th>
+          <th>Qd · Lt</th><th>Responsável</th><th>Situação</th><th title="Anexos">Anx.</th></tr></thead>
+        <tbody id="lst-corpo"></tbody>
+      </table>
+    </div>
+    <footer class="cad-rodape lst-rodape">
+      <small id="lst-msg"></small>
+      <button type="button" class="sec" id="lst-csv">Lista (CSV)</button>
+      <button type="button" class="sec" id="lst-sel" disabled>Exportar selecionados</button>
+      <button type="button" id="lst-tudo">Exportar todos</button>
+    </footer>
+  </div>
 </section>
 
 <!-- Pede o PIN da equipe ou o código de administrador -->
